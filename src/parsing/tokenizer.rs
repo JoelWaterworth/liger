@@ -2,28 +2,40 @@ use nom::{digit, alpha, alphanumeric};
 use nom;
 use std::str;
 use std::str::FromStr;
-use llvm::*;
-use std::collections::HashMap;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Token {
-    Let,
-    Identifier(String),
     Add,
-    Sub,
-    Div,
-    Mul,
-    Integer(u64),
-    Float(f64),
-    OpenCurly,
+    And,
+    BitwiseAnd,
+    BitwiseOr,
+    BitwiseXor,
     CloseCurly,
-    OpenSquare,
-    CloseSquare,
-    OpenParen,
     CloseParen,
-    SemiColon,
+    CloseSquare,
+    Colon,
     Comma,
+    Div,
     Equal,
+    Float(f64),
+    Identifier(String),
+    Integer(u64),
+    Let,
+    Mul,
+    OpenCurly,
+    OpenParen,
+    OpenSquare,
+    RightArrow,
+    SemiColon,
+    Sub,
+    Or,
+    GE,
+    LE,
+    GT,
+    LT,
+    Not,
+    IsEqualTo,
+    IsNotEqualTo
 }
 
 pub fn lexer(slice: &[u8]) -> Vec<Token> {
@@ -44,19 +56,12 @@ fn find_keywords(v: &mut Vec<Token>) {
     }
 }
 
-named!(pub tokenizer<Vec<Token>>, do_parse!(
-    f: foo >>
-    s: foo >>
-    (f)
+named!(tokenizer<Vec<Token>>, many0!(
+    alt!(   multi_char_tokens
+        |   char_tokens
+        |   Integer
+        |   identifier)
 ));
-
-named!(foo<Vec<Token>>,
-    alt!( bracket
-        | many0!( alt!( operator
-                |   punctuation
-                |   Integer
-                |   identifier)))
-);
 
 named!(pub word<String>, map_res!(
     map_res!(
@@ -71,43 +76,49 @@ named!(identifier<Token>, do_parse!(
     (Token::Identifier(n))
 ));
 
-named!(operator<Token>, do_parse!(
+named!(multi_char_tokens<Token>, do_parse!(
     p: ws!(alt!(
-          tag!("*")
-        | tag!("/")
-        | tag!("+")
-        | tag!("-")
-    )) >>
-    (match p[0] as char {
-        '*' => Token::Mul,
-        '/' => Token::Div,
-        '+' => Token::Add,
-        '-' => Token::Sub,
-        _ => panic!("operator needs more cases")
+            tag!("->")
+        |   tag!("&&")
+        |   tag!("||")
+        |   tag!("<=")
+        |   tag!(">=")
+        |   tag!("==")
+        |   tag!("!=")
+        )) >>
+
+    (match p {
+        b"->" => Token::RightArrow,
+        b"&&" => Token::And,
+        b"||" => Token::Or,
+        b"<=" => Token::LE,
+        b">=" => Token::GE,
+        b"==" => Token::IsEqualTo,
+        b"!=" => Token::IsNotEqualTo,
+        _ => panic!("multi_char_tokens needs more cases")
     })
 ));
 
-named!(pub bracket<Vec<Token>>, do_parse!(
-    tokens: delimited!(
-            ws!(tag!("{")),
-            tokenizer,
-            ws!(tag!("}"))
-        ) >>
-    ({
-        let mut mv = tokens.clone();
-        mv.push(Token::CloseCurly);
-        mv.insert(0, Token::OpenCurly);
-        mv
-    })
-));
-
-named!(punctuation<Token>, do_parse!(
+named!(char_tokens<Token>, do_parse!(
     p: ws!(alt!(
           tag!("(")
         | tag!(")")
         | tag!(";")
         | tag!(",")
         | tag!("=")
+        | tag!("{")
+        | tag!("}")
+        | tag!("*")
+        | tag!("/")
+        | tag!("+")
+        | tag!("-")
+        | tag!(":")
+        | tag!("!")
+        | tag!("<")
+        | tag!(">")
+        | tag!("&")
+        | tag!("|")
+        | tag!("^")
     )) >>
     (match p[0] as char {
         '(' => Token::OpenParen,
@@ -115,7 +126,20 @@ named!(punctuation<Token>, do_parse!(
         ',' => Token::Comma,
         ';' => Token::SemiColon,
         '=' => Token::Equal,
-        _ => panic!("punctuation needs more cases")
+        '{' => Token::OpenCurly,
+        '}' => Token::CloseCurly,
+        '*' => Token::Mul,
+        '/' => Token::Div,
+        '+' => Token::Add,
+        '-' => Token::Sub,
+        ':' => Token::Colon,
+        '!' => Token::Not,
+        '<' => Token::LT,
+        '>' => Token::GT,
+        '&' => Token::BitwiseAnd,
+        '|' => Token::BitwiseOr,
+        '^' => Token::BitwiseXor,
+        _ => panic!("char_tokens needs more cases")
     })
 ));
 
