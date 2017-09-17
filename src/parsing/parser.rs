@@ -283,12 +283,11 @@ pub fn parse_func_case(tokens: &mut Vec<Token>) -> FuncCase {
     let t = tokens.pop().unwrap();
     let mut v = Vec::new();
     loop {
-        match t {
+        match t.clone() {
             Token::Equal => break,
             Token::Identifier(s) => v.push(Match::WildCard(s)),
             _ => panic!("unexpected function case {:?}", t)
         }
     }
-
-
+    FuncCase{matches: v, body: Box::new(Expr::LiteralUint(0))}
 }

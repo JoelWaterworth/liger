@@ -55,8 +55,8 @@ pub enum Statement {
 
 #[derive(Clone, Debug)]
 pub struct FuncCase {
-    matches: Vec<Match>,
-    body: Box<Expr>,
+    pub matches: Vec<Match>,
+    pub body: Box<Expr>,
 }
 
 #[derive(Clone, Debug)]
@@ -78,6 +78,6 @@ pub enum Declaration {
 
 #[derive(Clone, Debug)]
 pub struct SourceFile {
-    imports: Vec<String>,
-    decls: Vec<Declaration>,
+    pub imports: Vec<String>,
+    pub decls: Vec<Declaration>,
 }
