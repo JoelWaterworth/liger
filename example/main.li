@@ -1,0 +1,2 @@
+foo:(u64, u64) -> u64
+foo x y = x + y;

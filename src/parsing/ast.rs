@@ -1,0 +1,5 @@
+enum AST {
+    FunctionCall,
+    Definition,
+
+}
