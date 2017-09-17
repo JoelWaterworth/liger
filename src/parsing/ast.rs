@@ -61,8 +61,8 @@ pub struct FuncCase {
 
 #[derive(Clone, Debug)]
 pub struct FieldDef {
-    name: String,
-    ty: Type,
+    pub name: String,
+    pub ty: Type,
 }
 
 #[derive(Clone, Debug)]

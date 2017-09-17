@@ -178,13 +178,117 @@ pub fn parse_statement(tokens: &mut Vec<Token>) -> Statement {
 }
 
 pub fn parse_field_def(tokens: &mut Vec<Token>) -> FieldDef {
-    panic!("")
-}
-
-pub fn parse_type(tokens: &mut Vec<Token>) -> Type {
-    panic!("")
+    let t = tokens.pop().unwrap();
+    match t {
+        Token::Identifier(name) => {
+            expect_token(tokens, Token::Colon);
+            let nt = tokens.pop().unwrap();
+            match nt {
+                Token::Identifier(type_name) => FieldDef {name, ty: Type::Named(type_name)},
+                _ => panic!("expected type")
+            }
+        }
+        _ => panic!("expected name found {:?}", t)
+    }
 }
 
 pub fn parse_declaration(tokens: &mut Vec<Token>) -> Declaration {
-    panic!("")
+    let t = tokens.pop().unwrap();
+    match t {
+        Token::Struct => {
+            let name_token = tokens.pop().unwrap();
+            let name = match name_token {
+                Token::Identifier(x) => x,
+                _ => panic!("parsing struct and expected structs name")
+            };
+            expect_token(tokens, Token::OpenCurly);
+            let mut v = Vec::new();
+            loop {
+                v.push(parse_field_def(tokens));
+                let nt = clone_nested(tokens.last()).unwrap();
+                match nt {
+                    Token::Identifier(_) => {},
+                    Token::CloseCurly => {
+                        tokens.pop();
+                        return Declaration::StructDef(name, v)
+                    },
+                    Token::Comma => {
+                        tokens.pop();
+                        let nnt = clone_nested(tokens.last()).unwrap();
+                        match nnt {
+                            Token::Identifier(_) => {},
+                            Token::CloseCurly => {
+                                tokens.pop();
+                                return Declaration::StructDef(name, v)
+                            },
+                            _ => panic!("")
+                        }
+                    },
+                    _ => panic!("")
+                }
+            }
+        }
+        Token::Identifier(name) => {
+            expect_token(tokens, Token::Colon);
+            expect_token(tokens, Token::OpenParen);
+
+            let mut types = Vec::new();
+
+            loop {
+                let nt = tokens.pop().unwrap();
+                match nt {
+                    Token::Identifier(ty) => {
+                        types.push(Type::Named(ty));
+                        let nnt = tokens.pop().unwrap();
+                        match nnt {
+                            Token::Comma => {},
+                            Token::CloseParen => break,
+                            _ => panic!("unexpected {:?}", nnt)
+                        }
+                    },
+                    _ => panic!("")
+                }
+            }
+            expect_token(tokens, Token::RightArrow);
+
+            let nt = tokens.pop().unwrap();
+
+            let ret = match nt {
+                Token::Identifier(r) => r,
+                _ => panic!("expected return type")
+            };
+
+            let mut cases = Vec::new();
+
+            loop {
+               let nc = clone_nested(tokens.last());
+                match nc {
+                    Some(Token::Identifier(x)) => {
+                        if x != name {
+                            break
+                        }
+                    },
+                    _ => break
+                }
+                cases.push(parse_func_case(tokens));
+            }
+
+            return Declaration::FunctionDef(name, types, Type::Named(ret), cases)
+        }
+        _ => panic!("")
+    }
+}
+
+pub fn parse_func_case(tokens: &mut Vec<Token>) -> FuncCase {
+    let t = tokens.pop().unwrap();
+    let mut v = Vec::new();
+    loop {
+        match t {
+            Token::Equal => break,
+            Token::Identifier(s) => v.push(Match::WildCard(s)),
+            _ => panic!("unexpected function case {:?}", t)
+        }
+    }
+
+
 }

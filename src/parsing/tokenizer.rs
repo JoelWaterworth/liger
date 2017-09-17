@@ -35,7 +35,8 @@ pub enum Token {
     LT,
     Not,
     IsEqualTo,
-    IsNotEqualTo
+    IsNotEqualTo,
+    Struct,
 }
 
 pub fn lexer(slice: &[u8]) -> Vec<Token> {
@@ -49,6 +50,7 @@ fn find_keywords(v: &mut Vec<Token>) {
        match t.clone() {
             Token::Identifier(s) => {match s.as_str() {
                     "let" => *t = Token::Let,
+                    "struct" => *t = Token::Struct,
                     _ => {}
                 }},
             _ => {}
