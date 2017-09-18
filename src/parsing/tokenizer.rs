@@ -1,5 +1,4 @@
-use nom::{digit, alpha, alphanumeric};
-use nom;
+use nom::{digit, alphanumeric};
 use std::str;
 use std::str::FromStr;
 
@@ -70,7 +69,7 @@ fn find_keywords(v: &mut Vec<Token>) {
 named!(tokenizer<Vec<Token>>, many0!(
     alt!(   multi_char_tokens
         |   char_tokens
-        |   Integer
+        |   integer
         |   identifier)
 ));
 
@@ -156,7 +155,7 @@ named!(char_tokens<Token>, do_parse!(
     })
 ));
 
-named!(Integer<Token>, do_parse!(
+named!(integer<Token>, do_parse!(
     n: map_res!(
           map_res!(
             ws!(digit),

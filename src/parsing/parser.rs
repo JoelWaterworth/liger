@@ -6,11 +6,11 @@ pub fn parse_source_file(tokens: &mut Vec<Token>) -> SourceFile {
     let mut imports = Vec::new();
     loop {
         let n = clone_nested(tokens.last());
-        match n {
+        match n.clone() {
             Some(Token::Identifier(_)) => decls.push(parse_function_decl(tokens)),
             Some(Token::Struct) => decls.push(parse_struct(tokens)),
             Some(Token::Import) => imports.push(parse_import(tokens)),
-            Some(a) => panic!("unexpect {?} in parse_source_file"),
+            Some(a) => panic!("unexpect {:?} in parse_source_file", n),
             None => break
         }
     }
@@ -34,6 +34,10 @@ pub fn parse_term(tokens: &mut Vec<Token>) -> Expr {
     match t {
         Token::Integer(x) => Expr::LiteralUint(x),
         Token::Identifier(x) => Expr::Var(x),
+        Token::If => {
+            let (expr, fs, ss) = parse_if_statement(tokens);
+            Expr::If(Box::new(expr), fs, ss)
+        }
         _ => panic!("unexpected {:?}", t)
     }
 }
@@ -249,20 +253,34 @@ pub fn parse_statements(tokens: &mut Vec<Token>) -> Vec<Statement> {
                 }
             },
             Token::If => {
-                expect_token(tokens, Token::OpenParen);
-                let expr = parse_expr(tokens);
-                expect_token(tokens, Token::CloseParen);
-                let fs = parse_statements(tokens);
-                expect_token(tokens, Token::Else);
-                let ss = parse_statements(tokens);
+                let (expr, fs, ss) = parse_if_statement(tokens);
                 v.push(Statement::If(Box::new(expr),fs,ss));
             }
-
             Token::CloseCurly => break,
+            Token::Return => {
+                let ret = parse_expr(tokens);
+                v.push(Statement::Return(Box::new(ret)));
+            },
             _ => panic!("")
         }
     }
     v
+}
+
+fn parse_if_statement(tokens: &mut Vec<Token>) -> (Expr, Vec<Statement>, Vec<Statement>) {
+    let expr = parse_expr(tokens);
+    let fs = parse_statements(tokens);
+    let t = clone_nested(tokens.last());
+    match t {
+        Some(Token::Else) => {
+            tokens.pop().unwrap();
+            let ss = parse_statements(tokens);
+            return (expr, fs, ss)
+        }
+        _ => return (expr, fs, Vec::new())
+    }
+
+
 }
 
 pub fn parse_field_def(tokens: &mut Vec<Token>) -> FieldDef {

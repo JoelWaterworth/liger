@@ -1,7 +1,3 @@
-use nom::{digit, alpha, alphanumeric};
-use nom;
-use std::collections::HashMap;
-use std::str::FromStr;
 use std::str;
 
 mod ast;

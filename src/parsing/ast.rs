@@ -1,7 +1,5 @@
 #[derive(Clone, Debug)]
 pub enum BinaryOperator{
-    Pow,
-
     Mul,
     Div,
     And,
@@ -56,6 +54,7 @@ pub enum Statement {
     Let(String, Box<Expr>),
     FunctionCall(Box<Expr>, Vec<Expr>),
     MethodCall(Box<Expr>, String, Vec<Expr>),
+    Return(Box<Expr>),
 }
 
 #[derive(Clone, Debug)]

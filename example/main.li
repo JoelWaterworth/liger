@@ -1,2 +1,5 @@
 bar:(float) -> Plah
-bar f = {let x = foo(x).bar();}
+bar f = {
+    return 5
+    let x = f;
+}
