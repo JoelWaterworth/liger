@@ -40,6 +40,7 @@ pub enum Token {
     SemiColon,
     Struct,
     Sub,
+    Return,
 }
 
 pub fn lexer(slice: &[u8]) -> Vec<Token> {
@@ -57,6 +58,7 @@ fn find_keywords(v: &mut Vec<Token>) {
                     "if" => *t = Token::If,
                     "import" => *t = Token::Import,
                     "else" => *t = Token::Else,
+                    "return" => *t = Token::Return,
                     _ => {}
                 }},
             _ => {}
