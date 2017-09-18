@@ -1,6 +1,5 @@
 #[macro_use]
 extern crate nom;
-extern crate llvm;
 extern crate libc;
 /*
     TODO: create llvm backend

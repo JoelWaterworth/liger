@@ -45,34 +45,55 @@ fn clone_nested<T: Clone>(x: Option<&T>) -> Option<T> {
     }
 }
 
+fn function_args(tokens: &mut Vec<Token>) -> Vec<Expr> {
+    let mut v = Vec::new();
+    loop {
+        let t = clone_nested(tokens.last()).unwrap();
+        match t {
+            Token::CloseParen => {
+                tokens.pop();
+                break
+            },
+            _ => {}
+        }
+        v.push(parse_expr(tokens));
+        let nt = tokens.pop().unwrap();
+        match nt {
+            Token::CloseParen => break,
+            Token::Comma => {}
+            _ => {}
+        }
+    }
+    v
+}
+
 fn parse_expr_0(tokens: &mut Vec<Token>) -> Expr {
     let mut output = parse_term(tokens);
     loop {
         let n = clone_nested(tokens.last());
-        let nn = clone_nested(tokens.last());
-        match (n,nn) {
-            (Some(Token::OpenParen), _) => {
+        match n {
+            Some(Token::OpenParen) => {
                 tokens.pop();
-                let mut v = Vec::new();
-                loop {
-                    let t = clone_nested(tokens.last()).unwrap();
-                    match t {
-                        Token::CloseParen => {
-                            tokens.pop();
-                            break
-                        },
-                        _ => {}
-                    }
-                    v.push(parse_expr(tokens));
-                    let nt = tokens.pop().unwrap();
-                    match nt {
-                        Token::CloseParen => break,
-                        Token::Comma => {}
-                        _ => {}
-                    }
-                }
+                let v = function_args(tokens);
                 output = Expr::App(Box::new(output), v)
             },
+            Some(Token::Dot) => {
+                tokens.pop();
+                let x = tokens.pop();
+                let name = match x {
+                    Some(Token::Identifier(y)) => y,
+                    _ => panic!("expected function name found {:?}", x)
+                };
+                let n = clone_nested(tokens.last());
+                match n {
+                    Some(Token::OpenParen) => {
+                        tokens.pop();
+                        let v = function_args(tokens);
+                        output = Expr::MethodCall(Box::new(output), name, v)
+                    }
+                    _ => output = Expr::MethodCall(Box::new(output), name, Vec::new())
+                }
+            }
             _ => return output
         }
     }

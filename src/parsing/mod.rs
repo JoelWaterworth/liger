@@ -1,4 +1,3 @@
-use llvm::*;
 use nom::{digit, alpha, alphanumeric};
 use nom;
 use std::collections::HashMap;

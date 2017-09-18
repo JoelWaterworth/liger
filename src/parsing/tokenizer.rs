@@ -15,6 +15,7 @@ pub enum Token {
     CloseSquare,
     Colon,
     Comma,
+    Dot,
     Div,
     Else,
     Equal,
@@ -129,6 +130,7 @@ named!(char_tokens<Token>, do_parse!(
         | tag!("&")
         | tag!("|")
         | tag!("^")
+        | tag!(".")
     )) >>
     (match p[0] as char {
         '(' => Token::OpenParen,
@@ -149,6 +151,7 @@ named!(char_tokens<Token>, do_parse!(
         '&' => Token::BitwiseAnd,
         '|' => Token::BitwiseOr,
         '^' => Token::BitwiseXor,
+        '.' => Token::Dot,
         _ => panic!("char_tokens needs more cases")
     })
 ));
