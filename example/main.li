@@ -1,2 +1,2 @@
-foo:(u64, u64) -> u64
-foo x y = x + y;
+bar:(float) -> Plah
+bar f = {let x = foo(x);}
