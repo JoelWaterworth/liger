@@ -43,9 +43,8 @@ pub enum Expr {
     Case(Box<Expr>, Vec<(Match, Box<Expr>)>),
     LiteralUint(u64),
     MethodCall(Box<Expr>, String, Vec<Expr>),
+    StructInit(Type, Vec<(String, Expr)>),
 }
-
-//foo.method(x)
 
 #[derive(Clone, Debug)]
 pub enum Statement {
@@ -75,9 +74,19 @@ pub enum Type {
 }
 
 #[derive(Clone, Debug)]
+pub struct FunctionDefinition {
+    pub name: String,
+    pub arg_types: Vec<Type>,
+    pub ret_type: Type,
+    pub cases: Vec<FuncCase>
+}
+
+#[derive(Clone, Debug)]
 pub enum Declaration {
-    FunctionDef(String, Vec<Type>, Type, Vec<FuncCase>),
+    FunctionDef(FunctionDefinition),
     StructDef(String, Vec<FieldDef>),
+    //trait
+    //enum
 }
 
 #[derive(Clone, Debug)]

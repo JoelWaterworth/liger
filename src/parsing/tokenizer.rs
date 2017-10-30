@@ -41,6 +41,9 @@ pub enum Token {
     Struct,
     Sub,
     Return,
+    Trait,
+    Enum,
+    SelfTok,
 }
 
 pub fn lexer(slice: &[u8]) -> Vec<Token> {
@@ -53,12 +56,15 @@ fn find_keywords(v: &mut Vec<Token>) {
     for t in v.iter_mut() {
        match t.clone() {
             Token::Identifier(s) => {match s.as_str() {
-                    "let" => *t = Token::Let,
-                    "struct" => *t = Token::Struct,
-                    "if" => *t = Token::If,
-                    "import" => *t = Token::Import,
-                    "else" => *t = Token::Else,
-                    "return" => *t = Token::Return,
+                    "let"       => *t = Token::Let,
+                    "struct"    => *t = Token::Struct,
+                    "if"        => *t = Token::If,
+                    "import"    => *t = Token::Import,
+                    "else"      => *t = Token::Else,
+                    "return"    => *t = Token::Return,
+                    "trait"     => *t = Token::Trait,
+                    "enum"      => *t = Token::Enum,
+                    "self"      => *t = Token::SelfTok,
                     _ => {}
                 }},
             _ => {}

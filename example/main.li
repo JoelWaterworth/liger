@@ -1,5 +1,0 @@
-bar:(float) -> Plah
-bar f = {
-    return 5
-    let x = f;
-}
