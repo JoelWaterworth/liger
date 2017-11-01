@@ -13,7 +13,6 @@ mod parsing;
 mod interpreter;
 mod type_checker;
 use parsing::*;
-use parsing::ast::SourceFile;
 use interpreter::interpret_source_file;
 use type_checker::type_check_source_file;
 

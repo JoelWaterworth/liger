@@ -73,6 +73,14 @@ pub enum Type {
     Named(String),
 }
 
+impl Type {
+    pub fn get_name(&self) -> &String {
+        match self {
+            &Type::Named(ref n) => n
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct FunctionDefinition {
     pub name: String,
