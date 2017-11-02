@@ -23,16 +23,15 @@ pub fn type_check_source_file(sf: &SourceFile) {
             &Declaration::FunctionDef(ref func) => {
                 fhm.push(func.clone());
             },
-            &Declaration::StructDef(ref name, ref fields) => {
-                hm.insert(name.clone(), fields.clone());
-            },
-            _ => panic!("")
+            &Declaration::StructDef(ref name, ref fields, ref methods) => {
+                hm.insert(name.clone(), (fields.clone(), methods));
+            }
         };
     };
 
     for (name, fields) in hm.iter() {
         let mut fds = HashMap::new();
-        for field in fields.iter() {
+        for field in fields.0.iter() {
             let ty = match field.ty {
                 ast::Type::Named(ref x) => match x.as_str() {
                     "i64" => Type::Int,
@@ -51,7 +50,11 @@ pub fn type_check_source_file(sf: &SourceFile) {
                 None => {}
             };
         }
-        match type_checker.structs.insert(name.clone(), (fds, HashMap::new()))  {
+        let mut mds = HashMap::new();
+        for method in fields.1.iter() {
+
+        }
+        match type_checker.structs.insert(name.clone(), (fds, mds))  {
             Some(x) => panic!("{:?}", x),
             None => {}
         };
@@ -185,7 +188,8 @@ impl TypeChecker {
                         panic!("{:?} could not be found", x)
                     }
                 }
-            }
+            },
+            &ast::Type::SelfT => panic!("")
         }
     }
     fn eval_expr(&self, env: &Environment, expr: &Expr)-> Type {
@@ -202,7 +206,8 @@ impl TypeChecker {
                             }
                         }
                         Type::Struct(x.clone())
-                    }
+                    },
+                    &ast::Type::SelfT => panic!("")
                 }
             },
             &Expr::LiteralUint(_) => Type::Int,

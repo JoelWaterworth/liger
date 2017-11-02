@@ -71,12 +71,14 @@ pub struct FieldDef {
 #[derive(Clone, Debug)]
 pub enum Type {
     Named(String),
+    SelfT
 }
 
 impl Type {
-    pub fn get_name(&self) -> &String {
+    pub fn get_name(&self) -> Option<&String> {
         match self {
-            &Type::Named(ref n) => n
+            &Type::Named(ref n) => Some(n),
+            _ => None
         }
     }
 }
@@ -92,7 +94,7 @@ pub struct FunctionDefinition {
 #[derive(Clone, Debug)]
 pub enum Declaration {
     FunctionDef(FunctionDefinition),
-    StructDef(String, Vec<FieldDef>),
+    StructDef(String, Vec<FieldDef>, Vec<FunctionDefinition>),
     //trait
     //enum
 }

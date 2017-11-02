@@ -24,14 +24,13 @@ pub fn interpret_source_file(sf: SourceFile) {
     for n in sf.decls.iter() {
         match n {
             &Declaration::FunctionDef(ref func) => {globals.insert(func.name.clone(), Data::Closure(func.clone()));},
-            &Declaration::StructDef(ref name, ref fields) => {
+            &Declaration::StructDef(ref name, ref fields, _) => {
                 let mut args_data = HashMap::new();
                 for f in fields.iter() {
                     args_data.insert(f.name.clone(), Data::Unit);
                 };
                 globals.insert(name.clone(), Data::StructVal(name.clone(),args_data, HashMap::new() ));
             }
-            _ => {}
         }
     }
 
@@ -151,7 +150,8 @@ impl Executor {
                         };
                         println!("fields {:?}", fields);
                         Data::StructVal(x.clone(), fields, HashMap::new())
-                    }
+                    },
+                    &Type::SelfT => panic!("")
                 }
             },
             &Expr::MethodCall(ref con, ref field, ref args) => {
@@ -215,7 +215,6 @@ impl Executor {
                 }).collect();
                 self.apply(&Data::Method(Box::new(var), field.clone()), args_data);
             }
-            _ => panic!("not yet featured okay okay fine Joel continue")
         }
         return None
     }

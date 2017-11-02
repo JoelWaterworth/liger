@@ -64,7 +64,7 @@ fn find_keywords(v: &mut Vec<Token>) {
                     "return"    => *t = Token::Return,
                     "trait"     => *t = Token::Trait,
                     "enum"      => *t = Token::Enum,
-                    "self"      => *t = Token::SelfTok,
+                    "Self"      => *t = Token::SelfTok,
                     _ => {}
                 }},
             _ => {}
