@@ -24,10 +24,15 @@ pub fn interpret_source_file(sf: SourceFile) {
     for n in sf.decls.iter() {
         match n {
             &Declaration::FunctionDef(ref func) => {globals.insert(func.name.clone(), Data::Closure(func.clone()));},
-            &Declaration::StructDef(ref name, ref fields, _) => {
+            &Declaration::StructDef(ref name, ref fields, ref funcs) => {
                 let mut args_data = HashMap::new();
+                let mut functions = HashMap::new();
                 for f in fields.iter() {
                     args_data.insert(f.name.clone(), Data::Unit);
+                };
+
+                for f in funcs.iter() {
+                    functions.insert(f.name.clone(), Data::Closure(f.clone()) );
                 };
                 globals.insert(name.clone(), Data::StructVal(name.clone(),args_data, HashMap::new() ));
             }
@@ -119,7 +124,7 @@ impl Executor {
             &Expr::Var(ref name) => {
                 match env.vars.get(name) {
                     Some(x) => x.clone(),
-                    None_ => {
+                    None => {
                         match self.globals.get(name) {
                             Some(x) => x.clone(),
                             None => panic!("variable not in scope {:?}", &name)

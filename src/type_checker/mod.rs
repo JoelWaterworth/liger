@@ -23,15 +23,16 @@ pub fn type_check_source_file(sf: &SourceFile) {
             &Declaration::FunctionDef(ref func) => {
                 fhm.push(func.clone());
             },
-            &Declaration::StructDef(ref name, ref fields, ref methods) => {
-                hm.insert(name.clone(), (fields.clone(), methods));
+            &Declaration::StructDef(ref name, ref fields, ref funcs) => {
+                hm.insert(name.clone(), (fields.clone(), funcs.clone()));
             }
         };
     };
+    let mut methods = Vec::new();
 
-    for (name, fields) in hm.iter() {
+    for (name, &(ref fields, ref func)) in hm.iter() {
         let mut fds = HashMap::new();
-        for field in fields.0.iter() {
+        for field in fields.iter() {
             let ty = match field.ty {
                 ast::Type::Named(ref x) => match x.as_str() {
                     "i64" => Type::Int,
@@ -50,15 +51,26 @@ pub fn type_check_source_file(sf: &SourceFile) {
                 None => {}
             };
         }
-        let mut mds = HashMap::new();
-        for method in fields.1.iter() {
 
-        }
-        match type_checker.structs.insert(name.clone(), (fds, mds))  {
+        match type_checker.structs.insert(name.clone(), (fds, HashMap::new()))  {
             Some(x) => panic!("{:?}", x),
             None => {}
         };
     };
+    for (name, &(_, ref func)) in hm.iter() {
+        let mut functions = HashMap::new();
+        for f in func.iter() {
+            let mut arg_types = Vec::new();
+            for arg in f.arg_types.iter() {
+                let ty = type_checker.eval_type(arg);
+                arg_types.push(ty);
+            }
+            let ret_type = type_checker.eval_type(&f.ret_type);
+            functions.insert(f.name.clone(), Type::Function(arg_types, Box::new(ret_type)));
+        }
+        type_checker.structs.get_mut(name).unwrap().1 = functions;
+        methods.push((name.clone(), func.clone()));
+    }
 
     for func in fhm.iter() {
         let mut arg_types = Vec::new();
@@ -68,8 +80,9 @@ pub fn type_check_source_file(sf: &SourceFile) {
         }
         let ret_type = type_checker.eval_type(&func.ret_type);
         type_checker.globals.insert(func.name.clone(), Type::Function(arg_types, Box::new(ret_type)));
-    }
-    type_checker.eval(&fhm);
+    };
+    type_checker.eval_functions(&fhm);
+    type_checker.eval_methods(&methods);
 }
 
 #[derive(Clone, Debug)]
@@ -110,7 +123,7 @@ impl TypeChecker {
         };
     }
 
-    fn function_call(&self, func: &Expr, args: &Vec<Expr>, env: &Environment) -> Type {
+    pub fn function_call(&self, func: &Expr, args: &Vec<Expr>, env: &Environment) -> Type {
         match func {
             &Expr::Var(ref name) => {
                 let ty = self.globals.get(name);
@@ -151,15 +164,7 @@ impl TypeChecker {
         }
     }
 
-    fn eval_functions(&self, funcs: &Vec<FunctionDefinition>) {
-        for func in funcs.iter() {
-            let mut v = Vec::new();
-            for arg in func.arg_types.iter() {
-                v.push(self.eval_type(arg));
-            }
-            let ret = self.eval_type(&func.ret_type);
-        }
-
+    pub fn eval_functions(&self, funcs: &Vec<FunctionDefinition>) {
         for func in funcs.iter() {
             let ty = expect_function(self.globals.get(&func.name).unwrap());
             for case in func.cases.iter() {
@@ -167,6 +172,10 @@ impl TypeChecker {
                 for (n, case_arg) in case.matches.iter().enumerate() {
                     match case_arg {
                         &Match::WildCard(ref arg) => {
+                            let x = match ty.0.get(n) {
+                                Some(y) => y.clone(),
+                                None => panic!("{:?} \n {:?}", func, ty)
+                            };
                             env.insert(arg.clone(), ty.0[n].clone());
                         },
                         _ => panic!("")
@@ -176,6 +185,37 @@ impl TypeChecker {
             }
         }
     }
+
+    pub fn eval_methods(&self, structs: &Vec<(String, Vec<FunctionDefinition>)>) {
+        for &(ref name, ref funcs) in structs.iter() {
+            let str = &self.structs.get(name).unwrap().1;
+            for func in funcs.iter() {
+                let ty = str.get(&func.name).unwrap();
+                let (arg_type, ret_type) = match ty {
+                    &Type::Function(ref args, ref ret) => (args, ret),
+                    _ => panic!("")
+                };
+
+                for case in func.cases.iter() {
+                    let mut env:Environment = HashMap::new();
+                    for (n, case_arg) in case.matches.iter().enumerate() {
+                        match case_arg {
+                            &Match::WildCard(ref arg) => {
+                                let x = match arg_type.get(n) {
+                                    Some(y) => y.clone(),
+                                    None => panic!("{:?} \n {:?}", func, (arg_type, ret_type))
+                                };
+                                env.insert(arg.clone(), arg_type[n].clone());
+                            },
+                            _ => panic!("")
+                        }
+                    };
+                    self.eval_body(func, &case.body, &mut env);
+                }
+            }
+        }
+    }
+
     fn eval_type(&self, ty: &ast::Type) -> Type {
         match ty {
             &ast::Type::Named(ref x) => match x.as_str() {
@@ -213,6 +253,7 @@ impl TypeChecker {
             &Expr::LiteralUint(_) => Type::Int,
             &Expr::Var(ref n) => env.get(n).unwrap().clone(),
             &Expr::MethodCall(ref target, ref field, ref args) => self.eval_method_call(target, field, args, env),
+            &Expr::App(ref target, ref args) => self.function_call(target, args, env),
             x => panic!("{:?} is not implemented", x)
         }
     }

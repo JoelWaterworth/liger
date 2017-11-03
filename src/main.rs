@@ -20,7 +20,7 @@ fn main() {
     let path = Path::new("example/main.lig");
     let mut file = File::open(&path).unwrap();
     let mut s = String::new();
-    file.read_to_string(&mut s);
+    file.read_to_string(&mut s).ok().unwrap();
 
     let sf = parse(s.as_ref());
     type_check_source_file(&sf);

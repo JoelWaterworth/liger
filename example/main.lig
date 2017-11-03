@@ -1,11 +1,19 @@
 struct Foo {
     x: i64
     y: i64
+
+    add::(Foo) -> i64
+    add f = {
+        return f.x
+    }
 }
+
+foo::(i64) -> i64
+foo x = {return x}
 
 main::() -> IO
 main = {
     let f = Foo {x: 1, y: 2}
-    print(f.x)
+    print(5)
 }
 

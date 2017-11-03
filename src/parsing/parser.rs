@@ -559,7 +559,7 @@ pub fn parse_struct(tokens: &mut Vec<Token>) -> Declaration {
                         expect_token(&mut f, Token::Colon);
                         match f.pop().unwrap() {
                             Token::Colon => {
-                                funcs.push(parse_method(tokens));
+                                funcs.push(parse_function_decl(tokens));
                             }
                             Token::Identifier(_) => {
                                 fields.push(parse_field_def(tokens));
