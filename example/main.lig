@@ -4,7 +4,7 @@ struct Foo {
 
     add::(Foo) -> i64
     add foo = {
-        return foo.y
+        return foo.y + foo.x
     }
 }
 

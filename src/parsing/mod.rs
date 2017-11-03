@@ -1,5 +1,3 @@
-use std::str;
-
 pub mod ast;
 mod parser;
 mod tokenizer;

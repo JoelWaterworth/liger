@@ -99,9 +99,6 @@ fn expect_function(typ: &Type) -> (Vec<Type>, Box<Type>) {
 }
 
 impl TypeChecker {
-    pub fn eval(&self, funcs: &Vec<FunctionDefinition>) {
-        self.eval_functions(funcs)
-    }
 
     fn eval_body(&self, func_def: &FunctionDefinition, statements: &Vec<Statement>,env: &mut Environment) {
         let return_type = self.eval_type(&func_def.ret_type);
@@ -205,10 +202,6 @@ impl TypeChecker {
                     for (n, case_arg) in case.matches.iter().enumerate() {
                         match case_arg {
                             &Match::WildCard(ref arg) => {
-                                let x = match arg_type.get(n) {
-                                    Some(y) => y.clone(),
-                                    None => panic!("{:?} \n {:?}", func, (arg_type, ret_type))
-                                };
                                 env.insert(arg.clone(), arg_type[n].clone());
                             },
                             _ => panic!("")
@@ -258,6 +251,21 @@ impl TypeChecker {
             &Expr::Var(ref n) => env.get(n).unwrap().clone(),
             &Expr::MethodCall(ref target, ref field, ref args) => self.eval_method_call(target, field, args, env),
             &Expr::App(ref target, ref args) => self.function_call(target, args, env),
+            &Expr::BinaryExpr(ref op, ref left, ref right) => self.eval_operator(op, left, right, env),
+            x => panic!("{:?} is not implemented", x)
+        }
+    }
+
+    fn eval_operator(&self, op: &BinaryOperator, left: &Expr, right: &Expr, env: &Environment) -> Type {
+        let l = self.eval_expr(env, left);
+        let r = self.eval_expr(env, right);
+        match op {
+            &BinaryOperator::Add => {
+                match (l,r) {
+                    (Type::Int, Type::Int) => Type::Int,
+                    x => panic!("{:?} is not implemented", x)
+                }
+            },
             x => panic!("{:?} is not implemented", x)
         }
     }

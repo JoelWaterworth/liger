@@ -19,15 +19,6 @@ pub fn parse_source_file(tokens: &mut Vec<Token>) -> SourceFile {
 pub fn parse_import(tokens: &mut Vec<Token>) -> String {
     panic!("")
 }
-pub fn parse_binary_operator(tokens: &mut Vec<Token>) -> BinaryOperator {
-    panic!("")
-}
-pub fn parse_unary_operator(tokens: &mut Vec<Token>) -> UnaryOperator {
-    panic!("")
-}
-pub fn parse_match(tokens: &mut Vec<Token>) -> Match {
-    panic!("")
-}
 
 fn parse_struct_args(tokens: &mut Vec<Token>) -> Vec<(String, Expr)> {
     expect_token(tokens, Token::OpenCurly);

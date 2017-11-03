@@ -264,13 +264,6 @@ impl Executor {
             &Match::Constructor(_,_) => false,
         }
     }
-
-    fn func_match_arg_insert(&self, parameter: &Match, arg: Data, env: &mut Environment) {
-        match parameter {
-            &Match::WildCard(ref name) => {env.vars.insert(name.clone(), arg);},
-            &Match::Constructor(_,_) => panic!("Constructor"),
-        }
-    }
 }
 
 
