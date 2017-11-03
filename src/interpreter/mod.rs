@@ -34,7 +34,8 @@ pub fn interpret_source_file(sf: SourceFile) {
                 for f in funcs.iter() {
                     functions.insert(f.name.clone(), Data::Closure(f.clone()) );
                 };
-                globals.insert(name.clone(), Data::StructVal(name.clone(),args_data, HashMap::new() ));
+
+                globals.insert(name.clone(), Data::StructVal(name.clone(),args_data, functions ));
             }
         }
     }
@@ -75,9 +76,22 @@ impl Executor {
             &Data::Method(ref var, ref ty) => {
                 match var.borrow() {
                     &Data::StructVal(ref name, ref fields, ref funcs) => {
+                        let funcs = match self.globals.get(name) {
+                            Some(&Data::StructVal(_, _, ref f)) => f,
+                            _ => panic!("")
+                        };
                         match fields.get(ty) {
                             Some(f) => return f.clone(),
-                            None => panic!("field {:?}, fields{:?}", ty, fields)
+                            None => {
+                                match funcs.get(ty) {
+                                    Some(fun) => {
+                                        let mut m_args = args;
+                                        m_args.insert(0 , *var.clone());
+                                        self.apply( fun, m_args)
+                                    },
+                                    None => panic!("{:?} is unkown. {:?} {:?} could be used instead", ty, fields, funcs)
+                                }
+                            }
                         }
                     }
                     _ => panic!("")
@@ -153,7 +167,6 @@ impl Executor {
                         for &(ref name, ref val) in args.iter() {
                             fields.insert(name.clone(), self.eval(env, &val));
                         };
-                        println!("fields {:?}", fields);
                         Data::StructVal(x.clone(), fields, HashMap::new())
                     },
                     &Type::SelfT => panic!("")
@@ -233,6 +246,9 @@ impl Executor {
                 return None
             }
         }
+
+        println!("matches: {:?}, args: {:?}", func_case.matches, args);
+
         for (case, arg) in func_case.matches.iter().zip(args.iter()) {
             match case {
                 &Match::WildCard(ref name) => env.vars.insert(name.clone(), arg.clone()),

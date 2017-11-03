@@ -9,9 +9,7 @@ use parsing::tokenizer::{lexer};
 
 pub fn parse(slice: &[u8]) -> SourceFile {
     let mut x = lexer(slice);
-    println!("{:?}", &x);
     x.reverse();
     let sf = parse_source_file(&mut x);
-    println!("{:?}", &sf);
     sf
 }

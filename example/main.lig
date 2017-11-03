@@ -3,17 +3,19 @@ struct Foo {
     y: i64
 
     add::(Foo) -> i64
-    add f = {
-        return f.x
+    add foo = {
+        return foo.y
     }
 }
 
-foo::(i64) -> i64
-foo x = {return x}
+bar::(Foo) -> i64
+bar foo = {
+    return foo.x
+}
 
 main::() -> IO
 main = {
     let f = Foo {x: 1, y: 2}
-    print(5)
+    print(f.add())
 }
 

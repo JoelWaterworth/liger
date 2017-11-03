@@ -150,17 +150,21 @@ impl TypeChecker {
             &Expr::Var(ref name) => {
                 match env.get(name) {
                     Some(&Type::Struct(ref name)) => {
-                        let s = &self.structs.get(name).unwrap().0;
-                        let method = s.get(field);
-                        match method {
+                        let s = self.structs.get(name).unwrap();
+                        match s.0.get(field) {
                             Some(x) => return x.clone(),
-                            None => panic!("")
+                            None => {
+                                match s.1.get(field) {
+                                    Some(&Type::Function(ref arg_ty, ref ret_ty)) => *ret_ty.clone(),
+                                    _ => panic!("")
+                                }
+                            }
                         }
                     }
                     _ => panic!("")
                 }
             },
-            _ => panic!("")
+            x => panic!("{:?} is not implermented", x)
         }
     }
 
