@@ -29,7 +29,8 @@ pub enum UnaryOperator {
 #[derive(Clone, Debug)]
 pub enum Match {
     WildCard(String),
-    Constructor(String,Vec<Match>)
+    Constructor(String,Vec<Match>),
+    Lit(Lit),
 }
 
 #[derive(Clone, Debug)]
@@ -41,9 +42,14 @@ pub enum Expr {
     App(Box<Expr>, Vec<Expr>),
     If(Box<Expr>, Vec<Statement>, Vec<Statement>),
     Case(Box<Expr>, Vec<(Match, Box<Expr>)>),
-    LiteralUint(u64),
+    Lit(Lit),
     MethodCall(Box<Expr>, String, Vec<Expr>),
     StructInit(Type, Vec<(String, Expr)>),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Lit {
+    Integral(u64)
 }
 
 #[derive(Clone, Debug)]

@@ -1,12 +1,12 @@
-use parsing::ast::*;
+use type_checker::typed_ast::*;
+use parsing::ast::{BinaryOperator, Lit};
 use std::collections::HashMap;
 use std::borrow::Borrow;
 
 #[derive(Clone, Debug)]
 enum Data {
-    Int(i64),
-    BuiltInFunc(String),
-    Closure(FunctionDefinition),
+    Int(u64),
+    Closure(Function),
     Method(Box<Data>, String),
     Unit,
     Bool(bool),
@@ -18,26 +18,23 @@ struct Environment {
     vars: HashMap<String, Data>,
 }
 
-pub fn interpret_source_file(sf: SourceFile) {
+pub fn interpret_source_file(tast: Globals) {
     let mut globals:HashMap<String, Data> = HashMap::new();
-    globals.insert(String::from("print"), Data::BuiltInFunc(String::from("print")));
-    for n in sf.decls.iter() {
-        match n {
-            &Declaration::FunctionDef(ref func) => {globals.insert(func.name.clone(), Data::Closure(func.clone()));},
-            &Declaration::StructDef(ref name, ref fields, ref funcs) => {
-                let mut args_data = HashMap::new();
-                let mut functions = HashMap::new();
-                for f in fields.iter() {
-                    args_data.insert(f.name.clone(), Data::Unit);
-                };
 
-                for f in funcs.iter() {
-                    functions.insert(f.name.clone(), Data::Closure(f.clone()) );
-                };
+    for s in tast.structs.into_iter() {
+        let args_data: HashMap<String,Data> =  s.args.iter().map(|(name, ty)| {
+            (name.clone(), Data::Unit)
+        }).collect();
 
-                globals.insert(name.clone(), Data::StructVal(name.clone(),args_data, functions ));
-            }
-        }
+        let functions:HashMap<String,Data> = s.methods.into_iter().map(|(name, f)| {
+            (name, Data::Closure(f) )
+        }).collect();
+
+        globals.insert(s.name.clone(), Data::StructVal(s.name.clone(),args_data, functions ));
+    }
+
+    for f in tast.functions.iter() {
+        globals.insert(f.name.clone(), Data::Closure(f.clone()));
     }
 
     let main_func = globals.get("main").unwrap().clone();
@@ -55,20 +52,32 @@ impl Executor {
     fn apply(&self, func: &Data, args: Vec<Data>) -> Data {
         match func {
             &Data::Closure(ref func_def) => {
-                let mut env = Environment{vars: HashMap::new() };
-                for cases in func_def.cases.iter() {
-                    let res = self.func_match(cases, &args, &mut env);
-                    match res {
-                        Some(func_case) => {
-                            for statements in func_case.body.iter() {
-                                match self.exec(&mut env, statements) {
-                                    Some(x) => return x,
-                                    None => {}
-                                }
-                            }
+                match func_def.cases {
+                    Body::BuiltInFunc(ref name) => {
+                        if *name == "print" {
+                            println!("{:?}", args);
                             return Data::Unit
+                        } else {
+                            panic!("Unknown builtin")
                         }
-                        _ => {}
+                    },
+                    Body::Cases(ref cases) => {
+                        for cases in cases.iter() {
+                            let res = self.func_match(cases, &args);
+                            match res {
+                                Some(x) => {
+                                    let (statements, mut env) = x;
+                                    for statement in statements.iter() {
+                                        match self.exec(&mut env, statement) {
+                                            Some(x) => return x,
+                                            None => {}
+                                        }
+                                    }
+                                    return Data::Unit
+                                },
+                                None => {}
+                            }
+                        }
                     }
                 }
                 panic!("No matching function cases {:?}", func_def)
@@ -96,15 +105,8 @@ impl Executor {
                     }
                     _ => panic!("")
                 }
-            }
-            &Data::BuiltInFunc(ref name) => {
-                if *name == "print" {
-                    println!("{:?}", args);
-                    return Data::Unit
-                } else {
-                    panic!("Unknown builtin")
-                }},
-            _ => panic!("unexpected on apply")
+            },
+            _ => panic!("")
         }
     }
 
@@ -141,12 +143,14 @@ impl Executor {
                     None => {
                         match self.globals.get(name) {
                             Some(x) => x.clone(),
-                            None => panic!("variable not in scope {:?}", &name)
+                            None => {
+                                panic!("variable not in scope {:?}", &name)
+                            }
                         }
                     }
                 }
             }
-            &Expr::LiteralUint(n) => Data::Int(n as i64),
+            &Expr::Lit(Lit::Integral(n)) => Data::Int(n),
             &Expr::App(ref func, ref args) => {
                 let func_data = self.eval(env, func);
                 let args_data = args.iter().map(|x|{
@@ -156,20 +160,14 @@ impl Executor {
             },
             &Expr::StructInit(ref ty, ref args) => {
                 match ty {
-                    &Type::Named(ref x) => {
+                    &Type::Struct(ref x) => {
                         let mut fields = HashMap::new();
-                        match self.globals.get(x) {
-                            Some(x) => {
-
-                            },
-                            _ => panic!("not in global")
-                        }
                         for &(ref name, ref val) in args.iter() {
                             fields.insert(name.clone(), self.eval(env, &val));
                         };
                         Data::StructVal(x.clone(), fields, HashMap::new())
                     },
-                    &Type::SelfT => panic!("")
+                    _ => panic!("")
                 }
             },
             &Expr::MethodCall(ref con, ref field, ref args) => {
@@ -192,19 +190,19 @@ impl Executor {
                 }).collect();
                 return Some(self.apply(&func_data, args_data))
             }
-            &Statement::Assignment(ref name, ref expr) => {
+            &Statement::Assignment{ref ty, ref name, ref expr} => {
                 let x = self.eval(env, expr);
                 env.vars.insert(name.clone(), x);
             }
-            &Statement::Return(ref expr) => {
+            &Statement::Return{ref ty, ref expr} => {
                 let x = self.eval(env, expr);
                 return Some(x)
             }
-            &Statement::If(ref con, ref f, ref s) => {
-                let x = self.eval(env, con);
+            &Statement::If{ref condition, ref true_statements, ref false_statements} => {
+                let x = self.eval(env, condition);
                 match x {
                     Data::Bool(true) => {
-                        for statement in f.iter() {
+                        for statement in true_statements.iter() {
                             match self.exec(env, statement) {
                                 Some(x) => return Some(x),
                                 None => {}
@@ -212,7 +210,7 @@ impl Executor {
                         }
                     }
                     Data::Bool(false) => {
-                        for statement in s.iter() {
+                        for statement in false_statements.iter() {
                             match self.exec(env, statement) {
                                 Some(x) => return Some(x),
                                 None => {}
@@ -222,7 +220,7 @@ impl Executor {
                     _ => panic!("should be bool")
                 }
             }
-            &Statement::Let(ref name, ref expr) => {
+            &Statement::Let{ref ty, ref name, ref expr} => {
                 let x = self.eval(env, expr);
                 env.vars.insert(name.clone(), x);
             }
@@ -237,31 +235,38 @@ impl Executor {
         return None
     }
 
-    fn func_match(&self, func_case: &FuncCase, args: &Vec<Data>, env: &mut Environment) -> Option<FuncCase> {
-        if func_case.matches.is_empty() {
-            return Some(func_case.clone())
+    fn func_match<'a>(&self, case: &'a Case, args: &Vec<Data>) -> Option<(&'a Vec<Statement>, Environment)> {
+        let mut env = Environment{vars: HashMap::new() };
+        if case.args.is_empty() {
+            return Some((&case.statements, env))
         }
-        for (case, arg) in func_case.matches.iter().zip(args.iter()) {
-            if !self.func_match_arg_check(case, arg) {
+        for (case, arg) in case.args.iter().zip(args.iter()) {
+            if !self.func_match_arg_check(case, arg, &mut env) {
                 return None
             }
         }
 
-        println!("matches: {:?}, args: {:?}", func_case.matches, args);
-
-        for (case, arg) in func_case.matches.iter().zip(args.iter()) {
-            match case {
-                &Match::WildCard(ref name) => env.vars.insert(name.clone(), arg.clone()),
-                _ => panic!("")
-            };
-        };
-        return Some(func_case.clone())
+        println!("matches: {:?}, args: {:?}", case.args, args);
+        return Some((&case.statements, env))
     }
 
-    fn func_match_arg_check(&self, parameter: &Match, arg: &Data) -> bool{
+    fn func_match_arg_check(&self, parameter: &Pattern, arg: &Data, env: &mut Environment) -> bool {
         match parameter {
-            &Match::WildCard(ref name) => true,
-            &Match::Constructor(_,_) => false,
+            &Pattern::Binding{ref name, ref ty } => {
+                env.vars.insert(name.clone(), arg.clone());
+                return true
+            },
+            &Pattern::Constant {value: ConstVal{ref ty, val: Lit::Integral(ref n)}} => {
+                match arg {
+                    &Data::Int(ref m) => if n == m {
+                        return true
+                    } else {
+                        return false
+                    },
+                    _ => panic!("")
+                }
+            }
+            _ => false
         }
     }
 }

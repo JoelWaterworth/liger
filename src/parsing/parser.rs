@@ -10,12 +10,13 @@ pub fn parse_source_file(tokens: &mut Vec<Token>) -> SourceFile {
             Some(Token::Identifier(_)) => decls.push(Declaration::FunctionDef( parse_function_decl(tokens))),
             Some(Token::Struct) => decls.push(parse_struct(tokens)),
             Some(Token::Import) => imports.push(parse_import(tokens)),
-            Some(a) => panic!("unexpect {:?} in parse_source_file", n),
+            Some(_) => panic!("unexpect {:?} in parse_source_file", n),
             None => break
         }
     }
     SourceFile {decls, imports}
 }
+
 pub fn parse_import(tokens: &mut Vec<Token>) -> String {
     panic!("")
 }
@@ -44,7 +45,7 @@ fn parse_struct_args(tokens: &mut Vec<Token>) -> Vec<(String, Expr)> {
 pub fn parse_term(tokens: &mut Vec<Token>) -> Expr {
     let t = tokens.pop().unwrap();
     match t {
-        Token::Integer(x) => Expr::LiteralUint(x),
+        Token::Integer(x) => Expr::Lit(Lit::Integral(x)),
         Token::Identifier(x) => {
             let t = clone_nested(tokens.last());
             match t {
@@ -371,8 +372,6 @@ pub fn parse_method(tokens: &mut Vec<Token>) -> FunctionDefinition {
             expect_token(tokens, Token::Colon);
             expect_token(tokens, Token::OpenParen);
 
-            let nt = tokens.pop().unwrap();
-
             let mut types = Vec::new();
 
             loop {
@@ -546,7 +545,7 @@ pub fn parse_struct(tokens: &mut Vec<Token>) -> Declaration {
             loop {
                 let mut f = tokens.clone();
                 match f.pop().unwrap() {
-                    Token::Identifier(n) => {
+                    Token::Identifier(_) => {
                         expect_token(&mut f, Token::Colon);
                         match f.pop().unwrap() {
                             Token::Colon => {
@@ -580,6 +579,9 @@ pub fn parse_func_case(tokens: &mut Vec<Token>) -> FuncCase {
             Token::Identifier(s) => {
                 v.push(Match::WildCard(s))
             },
+            Token::Integer(x) => {
+                v.push(Match::Lit(Lit::Integral(x)))
+            }
             _ => panic!("unexpected function case {:?}", t)
         }
     }

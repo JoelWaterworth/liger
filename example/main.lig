@@ -1,21 +1,9 @@
-struct Foo {
-    x: i64
-    y: i64
-
-    add::(Foo) -> i64
-    add foo = {
-        return foo.y + foo.x
-    }
-}
-
-bar::(Foo) -> i64
-bar foo = {
-    return foo.x
-}
+bar::(i64) -> i64
+bar 5 = {return 6}
+bar x = {return x}
 
 main::() -> IO
 main = {
-    let f = Foo {x: 1, y: 2}
-    print(f.add())
+    print(bar(5))
 }
 

@@ -13,8 +13,8 @@ mod parsing;
 mod interpreter;
 mod type_checker;
 use parsing::*;
+use type_checker::type_check_ast;
 use interpreter::interpret_source_file;
-use type_checker::type_check_source_file;
 
 fn main() {
     let path = Path::new("example/main.lig");
@@ -23,6 +23,6 @@ fn main() {
     file.read_to_string(&mut s).ok().unwrap();
 
     let sf = parse(s.as_ref());
-    type_check_source_file(&sf);
-    interpret_source_file(sf)
+    let ty = type_check_ast(&sf);
+    interpret_source_file(ty);
 }
