@@ -1,9 +1,8 @@
-bar::(i64) -> i64
-bar 5 = {return 6}
-bar x = {return x}
 
 main::() -> IO
 main = {
-    print(bar(5))
+    let mut x = 5
+    x = 6
+    print(x)
 }
 

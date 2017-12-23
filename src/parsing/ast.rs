@@ -57,6 +57,7 @@ pub enum Statement {
     Assignment(String, Box<Expr>),
     If(Box<Expr>, Vec<Statement>, Vec<Statement>),
     Let(String, Box<Expr>),
+    LetMut(String, Box<Expr>),
     FunctionCall(Box<Expr>, Vec<Expr>),
     MethodCall(Box<Expr>, String, Vec<Expr>),
     Return(Box<Expr>),

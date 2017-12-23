@@ -43,6 +43,7 @@ pub enum Token {
     Return,
     Trait,
     Enum,
+    Mut,
     SelfTok,
 }
 
@@ -65,6 +66,7 @@ fn find_keywords(v: &mut Vec<Token>) {
                     "trait"     => *t = Token::Trait,
                     "enum"      => *t = Token::Enum,
                     "Self"      => *t = Token::SelfTok,
+                    "mut"       => *t = Token::Mut,
                     _ => {}
                 }},
             _ => {}

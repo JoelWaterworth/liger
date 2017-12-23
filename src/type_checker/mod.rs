@@ -219,6 +219,11 @@ impl<'a> TypeChecker<'a> {
                     env.insert(name, ty.clone());
                     Statement::Let {name: name.clone(), ty, expr: Box::new(expr)}
                 },
+                &ast::Statement::LetMut(ref name, ref expr) => {
+                    let (expr, ty) = self.eval_expr(expr, env);
+                    env.insert(name, Type::Cell(Box::new(ty.clone())));
+                    Statement::Let {name: name.clone(), ty: Type::Cell(Box::new(ty)), expr: Box::new(expr)}
+                }
                 &ast::Statement::Return(ref expr) => {
                     let ty = self.eval_expr(expr, env);
                     if ty.1 == *ret_type {
@@ -227,6 +232,20 @@ impl<'a> TypeChecker<'a> {
                         panic!("")
                     }
                 },
+                &ast::Statement::Assignment(ref name, ref expr) => {
+                    let (expr, ty) = self.eval_expr(expr, env);
+                    let var_ty = env.get(name);
+                    match var_ty {
+                        Some(&Type::Cell(ref c_ty)) => {
+                            if **c_ty == ty {
+                                Statement::Assignment{name: name.clone(), expr: Box::new(expr)}
+                            } else {
+                                panic!("the expression yeilds the wrong type")
+                            }
+                        },
+                        _ => panic!("assignment on immutable type")
+                    }
+                }
                 &ast::Statement::FunctionCall(ref expr, ref args) => {
                     let (t, a, r) = self.function_call(expr,args,env);
                     Statement::FunctionCall(Box::new(t), a)
@@ -280,9 +299,6 @@ impl<'a> TypeChecker<'a> {
         let functions:HashSet<Function> = self.typed_functions.iter().map(|(_, ref s)| {
             (*s).clone()
         }).collect();
-
-        println!("{:?}", functions);
-
         Globals { functions, structs}
     }
 }

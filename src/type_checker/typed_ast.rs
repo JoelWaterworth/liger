@@ -7,14 +7,46 @@ pub struct Globals {
     pub structs: HashSet<Struct>
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum Type {
     Int,
     Function(Function),
     Struct(String),
     Unit,
     Bool,
+    Cell(Box<Type>)
 }
+
+fn extract_from_cell(ty: &Type) -> Type {
+    match ty {
+        &Type::Cell(ref x) => {
+            let t = (**x).clone();
+            match t {
+                Type::Cell(ref y) => panic!(""),
+                _ => {}
+            }
+            t
+        },
+        x => x.clone()
+    }
+}
+
+impl PartialEq for Type {
+    fn eq(&self, other: &Type) -> bool {
+        match (self, other) {
+            (&Type::Function(ref left), &Type::Function(ref right)) => left == right,
+            (&Type::Struct(ref left),   &Type::Struct(ref right))   => left == right,
+            (&Type::Cell(ref left),     &Type::Cell(ref right))     => left == right,
+            (&Type::Cell(ref left),     right)                      => left.as_ref() == right,
+            (left,                      &Type::Cell(ref right))     => left == right.as_ref(),
+            (&Type::Int,                &Type::Int)                 => true,
+            (&Type::Unit,               &Type::Unit)                => true,
+            (&Type::Bool,               &Type::Bool)                => true,
+            _                                                       => false
+        }
+    }
+}
+
 impl Eq for Type {}
 
 #[derive(Clone, Debug)]
@@ -78,7 +110,6 @@ pub struct Case {
 #[derive(Clone, Debug)]
 pub enum Statement {
     Assignment{
-        ty: Type,
         name: String,
         expr: Box<Expr>
     },

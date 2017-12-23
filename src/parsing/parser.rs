@@ -284,6 +284,14 @@ pub fn method_calls(tokens: &mut Vec<Token>, tar: Expr) -> Statement {
     }
 }
 
+pub fn expect_identifier(tokens: &mut Vec<Token>) -> String {
+    let t = tokens.pop().unwrap();
+    match t {
+        Token::Identifier(x) => x,
+        _ => panic!("not a identifier it is in fact a {:?}", t)
+    }
+}
+
 pub fn parse_statements(tokens: &mut Vec<Token>) -> Vec<Statement> {
     let mut v = Vec::new();
     expect_token(tokens, Token::OpenCurly);
@@ -297,6 +305,12 @@ pub fn parse_statements(tokens: &mut Vec<Token>) -> Vec<Statement> {
                         expect_token(tokens, Token::Equal);
                         let val = parse_expr(tokens);
                         v.push(Statement::Let(x, Box::new(val)));
+                    },
+                    Token::Mut => {
+                        let s = expect_identifier(tokens);
+                        expect_token(tokens, Token::Equal);
+                        let val = parse_expr(tokens);
+                        v.push(Statement::LetMut(s, Box::new(val)));
                     }
                     _ => panic!("")
                 }

@@ -22,7 +22,7 @@ pub fn interpret_source_file(tast: Globals) {
     let mut globals:HashMap<String, Data> = HashMap::new();
 
     for s in tast.structs.into_iter() {
-        let args_data: HashMap<String,Data> =  s.args.iter().map(|(name, ty)| {
+        let args_data: HashMap<String,Data> =  s.args.iter().map(|(name, _)| {
             (name.clone(), Data::Unit)
         }).collect();
 
@@ -40,7 +40,6 @@ pub fn interpret_source_file(tast: Globals) {
     let main_func = globals.get("main").unwrap().clone();
     let exe = Executor{globals};
     exe.apply(&main_func, Vec::new());
-
 }
 
 #[derive(Clone, Debug)]
@@ -84,7 +83,7 @@ impl Executor {
             },
             &Data::Method(ref var, ref ty) => {
                 match var.borrow() {
-                    &Data::StructVal(ref name, ref fields, ref funcs) => {
+                    &Data::StructVal(ref name, ref fields, _) => {
                         let funcs = match self.globals.get(name) {
                             Some(&Data::StructVal(_, _, ref f)) => f,
                             _ => panic!("")
@@ -190,7 +189,7 @@ impl Executor {
                 }).collect();
                 return Some(self.apply(&func_data, args_data))
             }
-            &Statement::Assignment{ref ty, ref name, ref expr} => {
+            &Statement::Assignment{ref name, ref expr} => {
                 let x = self.eval(env, expr);
                 env.vars.insert(name.clone(), x);
             }
@@ -245,8 +244,6 @@ impl Executor {
                 return None
             }
         }
-
-        println!("matches: {:?}, args: {:?}", case.args, args);
         return Some((&case.statements, env))
     }
 
