@@ -3,8 +3,8 @@ struct Foo {
 }
 main::() -> IO
 main = {
-    let mut y = Foo{x: 0}
-    y.x = 4
-    print(y.x)
+    let mut y = 5
+    y = 1
+    print(y)
 }
 

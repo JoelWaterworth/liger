@@ -193,20 +193,22 @@ impl<'a> TypeChecker<'a> {
     fn eval_method_call(&self, target: &ast::Expr, field: &String, args: &Vec<ast::Expr>, env: &Environment) -> Type {
         match target {
             &ast::Expr::Var(ref name) => {
-                match env.get(name) {
-                    Some(&Type::Struct(ref name)) => {
-                        let s = self.structs.get(name).unwrap();
-                        match s.0.args.get(field) {
-                            Some(x) => return x.clone(),
-                            None => {
-                                match s.1.get(field) {
-                                    Some(&(ref arg_ty, ref ret_ty)) => ret_ty.clone(),
-                                    _ => panic!("field not found")
-                                }
+                fn struct_call(type_checker: &TypeChecker, name: &String, field: &String) -> Type {
+                    let s = type_checker.structs.get(name).unwrap();
+                    match s.0.args.get(field) {
+                        Some(x) => return x.clone(),
+                        None => {
+                            match s.1.get(field) {
+                                Some(&(ref arg_ty, ref ret_ty)) => ret_ty.clone(),
+                                _ => panic!("field not found")
                             }
                         }
                     }
-                    _ => panic!("method call on none struct")
+                }
+                match env.get(name) {
+                    Some(&Type::Struct(ref name)) => struct_call(self, name, field),
+                    Some(&Type::Cell(box Type::Struct(ref name))) => struct_call(self, name, field),
+                    x => panic!("method call on none struct, {:?} is not supported", x)
                 }
             },
             x => panic!("{:?} is not implermented", x)
@@ -235,11 +237,11 @@ impl<'a> TypeChecker<'a> {
                     }
                 },
                 &ast::Statement::Assignment(ref target, ref expr) => {
-                    let (expr, ty) = self.eval_expr(expr, env);
+                    let (n_expr, ty) = self.eval_expr(expr, env);
                     match self.eval_expr(target, env) {
-                        (ref expr, Type::Cell(ref c_ty)) => {
+                        (ref t_expr, Type::Cell(ref c_ty)) => {
                             if **c_ty == ty {
-                                Statement::Assignment{target: Box::new(expr.clone()), expr: Box::new(expr.clone())}
+                                Statement::Assignment{target: Box::new(t_expr.clone()), expr: Box::new(n_expr.clone())}
                             } else {
                                 panic!("the expression yields the wrong type")
                             }

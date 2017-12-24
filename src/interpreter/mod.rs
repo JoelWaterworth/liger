@@ -183,6 +183,18 @@ impl Executor {
         }
     }
 
+    fn eval_mut<'a>(&self, env: &'a mut Environment, expr: &Expr) -> &'a mut Data {
+        match expr {
+            &Expr::Var(ref name) => {
+                match env.vars.get_mut(name) {
+                    Some(x) => x,
+                    None => panic!("")
+                }
+            }
+            _ => panic!("")
+        }
+    }
+
     fn exec(&self, env: &mut Environment, statement: &Statement) -> Option<Data> {
         match statement {
             &Statement::FunctionCall(ref func, ref args) => {
@@ -193,23 +205,18 @@ impl Executor {
                 return Some(self.apply(&func_data, args_data))
             }
             &Statement::Assignment{ref target, ref expr} => {
-                panic!("Assignment not implemented")
-//                let x = self.eval(env, expr);
-//                match self.eval(env, target) {
-//                    Data::Method(ref var, ref field) => {
-//                        match var.as_ref() {
-//                            &Data::StructVal(ref name, ref fields, ref methods) => {
-//                                match fields.get(field).unwrap() {
-//                                    &Data::Cell(c) => c.data.set(x),
-//                                    _ => panic!("")
-//                                }
-//                            },
-//                            _ => panic!("")
-//                        }
-//                    }
-//                    Data::Cell(var) => var.data.set(x),
-//                    _ => panic!("")
-//                }
+                let x = self.eval(env, expr);
+                println!("{:?}", x);
+                match target {
+                    &box Expr::Var(ref name) => {
+                        if let Some(y) = env.vars.get_mut(name) {
+                            *y = x;
+                        } else {
+                            panic!("")
+                        }
+                    }
+                    _ => panic!("")
+                }
             }
             &Statement::Return{ref ty, ref expr} => {
                 let x = self.eval(env, expr);
