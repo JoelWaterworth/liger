@@ -73,7 +73,7 @@ pub enum Pattern {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone)]
 pub struct Function {
     pub name: String,
     pub args_ty: Vec<Type>,
@@ -110,7 +110,7 @@ pub struct Case {
 #[derive(Clone, Debug)]
 pub enum Statement {
     Assignment{
-        name: String,
+        target: Box<Expr>,
         expr: Box<Expr>
     },
     If{

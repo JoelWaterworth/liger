@@ -257,11 +257,9 @@ pub fn method_calls(tokens: &mut Vec<Token>, tar: Expr) -> Statement {
     let mut  target = tar;
     loop {
         tokens.pop();
-        let t = tokens.pop();
-        match t.clone() {
+        match tokens.pop().clone() {
             Some(Token::Identifier(name)) => {
-                let n = clone_nested(tokens.last());
-                match n {
+                match clone_nested(tokens.last()) {
                     Some(Token::OpenParen) => {
                         let args = function_args(tokens);
                         let nm = clone_nested(tokens.last());
@@ -270,16 +268,21 @@ pub fn method_calls(tokens: &mut Vec<Token>, tar: Expr) -> Statement {
                             _ => return Statement::MethodCall(Box::new(target), name, args)
                         }
                     }
-                    _ => {
-                        let nm = clone_nested(tokens.last());
-                        match nm {
-                            Some(Token::Dot) => target = Expr::MethodCall(Box::new(target), name, Vec::new()),
-                            _ => return Statement::MethodCall(Box::new(target), name, Vec::new())
-                        }
+                    Some(Token::Equal) => {
+                        tokens.pop();
+                        return Statement::Assignment(Box::new(Expr::MethodCall(Box::new(target), name, Vec::new())), Box::new(parse_expr(tokens)))
                     }
+                    t => panic!("expected name found {:?}", t)
+//                        {
+//                        let nm = clone_nested(tokens.last());
+//                        match nm {
+//                            Some(Token::Dot) => target = Expr::MethodCall(Box::new(target), name, Vec::new()),
+//                            _ => return Statement::MethodCall(Box::new(target), name, Vec::new())
+//                        }
+//                    }
                 }
             }
-            _ => panic!("expected name found {:?}", t)
+            t => panic!("expected name found {:?}", t)
         }
     }
 }
@@ -330,13 +333,16 @@ pub fn parse_statements(tokens: &mut Vec<Token>) -> Vec<Statement> {
                     Some(Token::Equal) => {
                         tokens.pop();
                         let ret = parse_expr(tokens);
-                        v.push(Statement::Assignment(name, Box::new(ret)));
+                        v.push(Statement::Assignment(Box::new(Expr::Var(name)), Box::new(ret)));
                     },
                     Some(Token::OpenParen) => {
                         let args = function_args(tokens);
                         v.push(Statement::FunctionCall(Box::new(Expr::Var(name)), args));
                     },
-                    Some(Token::Dot) => v.push(method_calls(tokens, Expr::Var(name))),
+                    Some(Token::Dot) => {
+
+                        v.push(method_calls(tokens, Expr::Var(name)))
+                    },
                     _ => panic!("")
                 }
             }
@@ -368,9 +374,12 @@ pub fn parse_field_def(tokens: &mut Vec<Token>) -> FieldDef {
     match t {
         Token::Identifier(name) => {
             expect_token(tokens, Token::Colon);
-            let nt = tokens.pop().unwrap();
-            match nt {
+            match tokens.pop().unwrap() {
                 Token::Identifier(type_name) => FieldDef {name, ty: Type::Named(type_name)},
+                Token::Mut => {
+                    let type_name = expect_identifier(tokens);
+                    FieldDef {name, ty: Type::Cell(Box::new(Type::Named(type_name)))}
+                }
                 _ => panic!("expected type")
             }
         }
@@ -562,12 +571,12 @@ pub fn parse_struct(tokens: &mut Vec<Token>) -> Declaration {
                     Token::Identifier(_) => {
                         expect_token(&mut f, Token::Colon);
                         match f.pop().unwrap() {
-                            Token::Colon => {
-                                funcs.push(parse_function_decl(tokens));
-                            }
                             Token::Identifier(_) => {
                                 fields.push(parse_field_def(tokens));
                             },
+                            Token::Mut => {
+                                fields.push(parse_field_def(tokens));
+                            }
                             _ => panic!("")
                         }
                     },

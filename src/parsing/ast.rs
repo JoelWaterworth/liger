@@ -54,7 +54,7 @@ pub enum Lit {
 
 #[derive(Clone, Debug)]
 pub enum Statement {
-    Assignment(String, Box<Expr>),
+    Assignment(Box<Expr>, Box<Expr>),
     If(Box<Expr>, Vec<Statement>, Vec<Statement>),
     Let(String, Box<Expr>),
     LetMut(String, Box<Expr>),
@@ -78,7 +78,8 @@ pub struct FieldDef {
 #[derive(Clone, Debug)]
 pub enum Type {
     Named(String),
-    SelfT
+    SelfT,
+    Cell(Box<Type>),
 }
 
 impl Type {

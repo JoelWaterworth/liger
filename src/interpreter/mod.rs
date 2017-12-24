@@ -2,15 +2,18 @@ use type_checker::typed_ast::*;
 use parsing::ast::{BinaryOperator, Lit};
 use std::collections::HashMap;
 use std::borrow::Borrow;
+use std::cell;
+use std::fmt;
+use std::rc::Rc;
 
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone)]
 enum Data {
     Int(u64),
     Closure(Function),
     Method(Box<Data>, String),
     Unit,
     Bool(bool),
-    StructVal(String, HashMap<String, Data>, HashMap<String, Data>) //name, fields, method table
+    StructVal(String, HashMap<String, Data>, HashMap<String, Data>), //name, fields, method table
 }
 
 #[derive(Clone, Debug)]
@@ -189,9 +192,24 @@ impl Executor {
                 }).collect();
                 return Some(self.apply(&func_data, args_data))
             }
-            &Statement::Assignment{ref name, ref expr} => {
-                let x = self.eval(env, expr);
-                env.vars.insert(name.clone(), x);
+            &Statement::Assignment{ref target, ref expr} => {
+                panic!("Assignment not implemented")
+//                let x = self.eval(env, expr);
+//                match self.eval(env, target) {
+//                    Data::Method(ref var, ref field) => {
+//                        match var.as_ref() {
+//                            &Data::StructVal(ref name, ref fields, ref methods) => {
+//                                match fields.get(field).unwrap() {
+//                                    &Data::Cell(c) => c.data.set(x),
+//                                    _ => panic!("")
+//                                }
+//                            },
+//                            _ => panic!("")
+//                        }
+//                    }
+//                    Data::Cell(var) => var.data.set(x),
+//                    _ => panic!("")
+//                }
             }
             &Statement::Return{ref ty, ref expr} => {
                 let x = self.eval(env, expr);

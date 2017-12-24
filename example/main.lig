@@ -1,8 +1,10 @@
-
+struct Foo {
+    x: mut i64
+}
 main::() -> IO
 main = {
-    let mut x = 5
-    x = 6
-    print(x)
+    let mut y = Foo{x: 0}
+    y.x = 4
+    print(y.x)
 }
 

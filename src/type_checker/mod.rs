@@ -61,7 +61,8 @@ impl Type {
                         None => panic!("{:?} is not expected", x)
                     }
                 }
-            }
+            },
+            &ast::Type::Cell(ref x) => Type::Cell(Box::new(Type::from_with_map(x.as_ref(), map))),
             _ => panic!("")
         }
     }
@@ -151,7 +152,8 @@ impl<'a> TypeChecker<'a> {
                         }
                         (Expr::StructInit(Type::Struct(x.clone()), fields), Type::Struct(x.clone()))
                     },
-                    &ast::Type::SelfT => panic!("")
+                    &ast::Type::SelfT => panic!("SelfT unimplemented"),
+                    &ast::Type::Cell(ref ty) => panic!("Cell unimplemented"),
                 }
             },
             &ast::Expr::Lit(Lit::Integral(n)) => (Expr::Lit(Lit::Integral(n.clone())), Type::Int),
@@ -199,12 +201,12 @@ impl<'a> TypeChecker<'a> {
                             None => {
                                 match s.1.get(field) {
                                     Some(&(ref arg_ty, ref ret_ty)) => ret_ty.clone(),
-                                    _ => panic!("")
+                                    _ => panic!("field not found")
                                 }
                             }
                         }
                     }
-                    _ => panic!("")
+                    _ => panic!("method call on none struct")
                 }
             },
             x => panic!("{:?} is not implermented", x)
@@ -232,18 +234,17 @@ impl<'a> TypeChecker<'a> {
                         panic!("")
                     }
                 },
-                &ast::Statement::Assignment(ref name, ref expr) => {
+                &ast::Statement::Assignment(ref target, ref expr) => {
                     let (expr, ty) = self.eval_expr(expr, env);
-                    let var_ty = env.get(name);
-                    match var_ty {
-                        Some(&Type::Cell(ref c_ty)) => {
+                    match self.eval_expr(target, env) {
+                        (ref expr, Type::Cell(ref c_ty)) => {
                             if **c_ty == ty {
-                                Statement::Assignment{name: name.clone(), expr: Box::new(expr)}
+                                Statement::Assignment{target: Box::new(expr.clone()), expr: Box::new(expr.clone())}
                             } else {
-                                panic!("the expression yeilds the wrong type")
+                                panic!("the expression yields the wrong type")
                             }
                         },
-                        _ => panic!("assignment on immutable type")
+                        _ => panic!("")
                     }
                 }
                 &ast::Statement::FunctionCall(ref expr, ref args) => {
