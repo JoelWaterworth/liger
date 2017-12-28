@@ -26,5 +26,6 @@ fn main() {
 
     let sf = parse(s.as_ref());
     let ty = type_check_ast(&sf);
+    println!("\n {:?}", ty);
     interpret_source_file(ty);
 }

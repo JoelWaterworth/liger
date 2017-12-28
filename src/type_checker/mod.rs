@@ -190,24 +190,25 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
+    fn type_from_struct_call(&self, name: &String, field: &String) -> Type {
+        let s = self.structs.get(name).unwrap();
+        match s.0.args.get(field) {
+            Some(x) => return x.clone(),
+            None => {
+                match s.1.get(field) {
+                    Some(&(ref arg_ty, ref ret_ty)) => ret_ty.clone(),
+                    _ => panic!("field not found")
+                }
+            }
+        }
+    }
+
     fn eval_method_call(&self, target: &ast::Expr, field: &String, args: &Vec<ast::Expr>, env: &Environment) -> Type {
         match target {
             &ast::Expr::Var(ref name) => {
-                fn struct_call(type_checker: &TypeChecker, name: &String, field: &String) -> Type {
-                    let s = type_checker.structs.get(name).unwrap();
-                    match s.0.args.get(field) {
-                        Some(x) => return x.clone(),
-                        None => {
-                            match s.1.get(field) {
-                                Some(&(ref arg_ty, ref ret_ty)) => ret_ty.clone(),
-                                _ => panic!("field not found")
-                            }
-                        }
-                    }
-                }
                 match env.get(name) {
-                    Some(&Type::Struct(ref name)) => struct_call(self, name, field),
-                    Some(&Type::Cell(box Type::Struct(ref name))) => struct_call(self, name, field),
+                    Some(&Type::Struct(ref name)) => self.type_from_struct_call(name, field),
+                    Some(&Type::Cell(box Type::Struct(ref name))) => self.type_from_struct_call(name, field),
                     x => panic!("method call on none struct, {:?} is not supported", x)
                 }
             },
@@ -249,6 +250,19 @@ impl<'a> TypeChecker<'a> {
                         _ => panic!("")
                     }
                 }
+                &ast::Statement::Assignment_2(ref l_expr, ref expr) => {
+                    let (n_expr, ty) = self.eval_expr(expr, env);
+                    match self.eval_l_expr(l_expr, env) {
+                        (ref t_expr, Type::Cell(ref c_ty)) => {
+                            if **c_ty == ty {
+                                Statement::Assignment2{l_expr: Box::new(t_expr.clone()), expr: Box::new(n_expr.clone())}
+                            } else {
+                                panic!("the expression yields the wrong type")
+                            }
+                        },
+                        _ => panic!("")
+                    }
+                }
                 &ast::Statement::FunctionCall(ref expr, ref args) => {
                     let (t, a, r) = self.function_call(expr,args,env);
                     Statement::FunctionCall(Box::new(t), a)
@@ -257,6 +271,26 @@ impl<'a> TypeChecker<'a> {
             }
         }).collect()
     }
+
+    pub fn eval_l_expr(&self, l_expr: &ast::LExpr, env: &Environment) -> (LExpr, Type) {
+        match l_expr {
+            &ast::LExpr::Var(ref name) => {
+                let ty = env.get(name).unwrap().clone();
+                return (LExpr::Var(name.clone()), ty)
+            },
+            &ast::LExpr::MethodCall(ref l_expr, ref field, ref arg) => {
+                let (t_l_expr, ty) = self.eval_l_expr(l_expr, env);
+                match ty {
+                    Type::Cell(box Type::Struct(ref name)) => {
+                        (LExpr::MethodCall(Box::new(t_l_expr), field.clone(), Vec::new()), self.type_from_struct_call(name, field))
+                    }
+                    _ => panic!("not implemented {:?}", ty)
+                }
+            }
+            _ => panic!("not implemented {:?}", l_expr)
+        }
+    }
+
     pub fn function_call(&self, func: &ast::Expr, args: &Vec<ast::Expr>, env: &Environment) -> (Expr, Vec<Expr>, Type) {
         match func {
             &ast::Expr::Var(ref name) => {

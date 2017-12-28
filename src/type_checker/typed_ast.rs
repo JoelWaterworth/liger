@@ -2,6 +2,7 @@ use parsing::ast;
 use std::collections::{HashSet, HashMap};
 use std::hash::{Hasher, Hash};
 
+#[derive(Clone, Debug)]
 pub struct Globals {
     pub functions: HashSet<Function>,
     pub structs: HashSet<Struct>
@@ -113,6 +114,10 @@ pub enum Statement {
         target: Box<Expr>,
         expr: Box<Expr>
     },
+    Assignment2{
+        l_expr: Box<LExpr>,
+        expr: Box<Expr>
+    },
     If{
         condition: Box<Expr>,
         true_statements: Vec<Statement>,
@@ -143,6 +148,12 @@ pub enum Expr {
     Lit(ast::Lit),
     MethodCall(Box<Expr>, String, Vec<Expr>),
     StructInit(Type, Vec<(String, Expr)>),
+}
+
+#[derive(Clone, Debug)]
+pub enum LExpr {
+    Var(String),
+    MethodCall(Box<LExpr>, String, Vec<Expr>),
 }
 
 #[derive(Clone, Debug)]

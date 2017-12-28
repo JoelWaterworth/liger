@@ -47,6 +47,12 @@ pub enum Expr {
     StructInit(Type, Vec<(String, Expr)>),
 }
 
+#[derive(Clone, Debug)]
+pub enum LExpr {
+    Var(String),
+    MethodCall(Box<LExpr>, String, Vec<Expr>),
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Lit {
     Integral(u64)
@@ -55,6 +61,7 @@ pub enum Lit {
 #[derive(Clone, Debug)]
 pub enum Statement {
     Assignment(Box<Expr>, Box<Expr>),
+    Assignment_2(Box<LExpr>, Box<Expr>),
     If(Box<Expr>, Vec<Statement>, Vec<Statement>),
     Let(String, Box<Expr>),
     LetMut(String, Box<Expr>),

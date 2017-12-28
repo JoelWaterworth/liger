@@ -105,7 +105,7 @@ impl Executor {
                             }
                         }
                     }
-                    _ => panic!("")
+                    _ => panic!("{:?}", var)
                 }
             },
             _ => panic!("")
@@ -183,18 +183,6 @@ impl Executor {
         }
     }
 
-    fn eval_mut<'a>(&self, env: &'a mut Environment, expr: &Expr) -> &'a mut Data {
-        match expr {
-            &Expr::Var(ref name) => {
-                match env.vars.get_mut(name) {
-                    Some(x) => x,
-                    None => panic!("")
-                }
-            }
-            _ => panic!("")
-        }
-    }
-
     fn exec(&self, env: &mut Environment, statement: &Statement) -> Option<Data> {
         match statement {
             &Statement::FunctionCall(ref func, ref args) => {
@@ -255,8 +243,28 @@ impl Executor {
                 }).collect();
                 self.apply(&Data::Method(Box::new(var), field.clone()), args_data);
             }
+            &Statement::Assignment2{ref l_expr, ref expr} => {
+                let x = self.eval(env, expr);
+                *self.eval_l_expr(l_expr, env) = x;
+            }
+            x => panic!("not implemented {:?}", x)
         }
         return None
+    }
+
+    fn eval_l_expr<'a>(&self, l_expr: &LExpr, env: &'a mut Environment) -> &'a mut Data {
+        match l_expr {
+            &LExpr::Var(ref name) => env.vars.get_mut(name).unwrap(),
+            &LExpr::MethodCall(ref var, ref field, _) => {
+                match self.eval_l_expr(var, env) {
+                    &mut Data::StructVal(ref name, ref mut fields, _) => {
+                        fields.get_mut(field).unwrap()
+                    }
+                    x => panic!("{:?}", x)
+                }
+            }
+            _ => panic!("{:?}", l_expr)
+        }
     }
 
     fn func_match<'a>(&self, case: &'a Case, args: &Vec<Data>) -> Option<(&'a Vec<Statement>, Environment)> {
