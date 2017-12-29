@@ -5,6 +5,9 @@ use std::borrow::Borrow;
 use std::cell;
 use std::fmt;
 use std::rc::Rc;
+use std::cell::Cell;
+
+type Ref<T>  = Rc<Cell<T>>;
 
 #[derive(Debug, Clone)]
 enum Data {
@@ -190,21 +193,7 @@ impl Executor {
                 let args_data = args.iter().map(|x|{
                    self.eval(env, x)
                 }).collect();
-                return Some(self.apply(&func_data, args_data))
-            }
-            &Statement::Assignment{ref target, ref expr} => {
-                let x = self.eval(env, expr);
-                println!("{:?}", x);
-                match target {
-                    &box Expr::Var(ref name) => {
-                        if let Some(y) = env.vars.get_mut(name) {
-                            *y = x;
-                        } else {
-                            panic!("")
-                        }
-                    }
-                    _ => panic!("")
-                }
+                self.apply(&func_data, args_data);
             }
             &Statement::Return{ref ty, ref expr} => {
                 let x = self.eval(env, expr);
@@ -243,7 +232,7 @@ impl Executor {
                 }).collect();
                 self.apply(&Data::Method(Box::new(var), field.clone()), args_data);
             }
-            &Statement::Assignment2{ref l_expr, ref expr} => {
+            &Statement::Assignment{ref l_expr, ref expr} => {
                 let x = self.eval(env, expr);
                 *self.eval_l_expr(l_expr, env) = x;
             }

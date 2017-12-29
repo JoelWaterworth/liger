@@ -111,10 +111,6 @@ pub struct Case {
 #[derive(Clone, Debug)]
 pub enum Statement {
     Assignment{
-        target: Box<Expr>,
-        expr: Box<Expr>
-    },
-    Assignment2{
         l_expr: Box<LExpr>,
         expr: Box<Expr>
     },

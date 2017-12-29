@@ -60,8 +60,7 @@ pub enum Lit {
 
 #[derive(Clone, Debug)]
 pub enum Statement {
-    Assignment(Box<Expr>, Box<Expr>),
-    Assignment_2(Box<LExpr>, Box<Expr>),
+    Assignment(Box<LExpr>, Box<Expr>),
     If(Box<Expr>, Vec<Statement>, Vec<Statement>),
     Let(String, Box<Expr>),
     LetMut(String, Box<Expr>),

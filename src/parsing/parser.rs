@@ -239,7 +239,6 @@ fn parse_expr(tokens: &mut Vec<Token>) -> Expr {
 }
 
 fn parse_bracketed_l_expr(tokens: &mut Vec<Token>) -> LExpr {
-    println!("bracket");
     expect_token(tokens, Token::OpenParen);
     let l_expr = parse_l_expr(tokens);
     expect_token(tokens, Token::CloseParen);
@@ -303,18 +302,7 @@ pub fn method_calls(tokens: &mut Vec<Token>, tar: Expr) -> Statement {
                             _ => return Statement::MethodCall(Box::new(target), name, args)
                         }
                     }
-                    Some(Token::Equal) => {
-                        tokens.pop();
-                        return Statement::Assignment(Box::new(Expr::MethodCall(Box::new(target), name, Vec::new())), Box::new(parse_expr(tokens)))
-                    }
                     t => panic!("expected name found {:?}", t)
-//                        {
-//                        let nm = clone_nested(tokens.last());
-//                        match nm {
-//                            Some(Token::Dot) => target = Expr::MethodCall(Box::new(target), name, Vec::new()),
-//                            _ => return Statement::MethodCall(Box::new(target), name, Vec::new())
-//                        }
-//                    }
                 }
             }
             t => panic!("expected name found {:?}", t)
@@ -367,11 +355,11 @@ pub fn parse_statements(tokens: &mut Vec<Token>) -> Vec<Statement> {
             Some(Token::Return) => {
                 tokens.pop();
                 let ret = parse_expr(tokens);
+                expect_token(tokens, Token::SemiColon);
                 v.push(Statement::Return(Box::new(ret)));
             },
             None => break,
             t => {
-                println!("start {:?}", t);
                 let mut assign_tokens = tokens.clone();
                 let mut func_tokens = tokens.clone();
                 let mut method_tokens = tokens.clone();
@@ -389,25 +377,6 @@ pub fn parse_statements(tokens: &mut Vec<Token>) -> Vec<Statement> {
                     panic!("{:?}", t)
                 }
             }
-//            Some(Token::Identifier(name)) => {
-//                let nt = clone_nested(tokens.last());
-//                match nt {
-//                    Some(Token::Equal) => {
-//                        tokens.pop();
-//                        let ret = parse_expr(tokens);
-//                        v.push(Statement::Assignment(Box::new(Expr::Var(name)), Box::new(ret)));
-//                    },
-//                    Some(Token::OpenParen) => {
-//                        let args = function_args(tokens);
-//                        v.push(Statement::FunctionCall(Box::new(Expr::Var(name)), args));
-//                    },
-//                    Some(Token::Dot) => {
-//
-//                        v.push(method_calls(tokens, Expr::Var(name)))
-//                    },
-//                    _ => panic!("")
-//                }
-//            }
         }
     }
     v
@@ -419,7 +388,7 @@ fn parse_assignment(tokens: &mut Vec<Token>) -> Option<Statement> {
         Some(Token::Equal) => {
             let expr = parse_expr(tokens);
             expect_token(tokens, Token::SemiColon);
-            return Some(Statement::Assignment_2(Box::new(l_expr), Box::new(expr)))
+            return Some(Statement::Assignment(Box::new(l_expr), Box::new(expr)))
         },
         _ => return None
     }
@@ -429,6 +398,7 @@ fn parse_function_call(tokens: &mut Vec<Token>) -> Option<Statement> {
     match tokens.pop() {
         Some(Token::Identifier(func)) => {
             let args = function_args(tokens);
+            expect_token(tokens, Token::SemiColon);
             Some(Statement::FunctionCall(Box::new(Expr::Var(func)), args))
         }
         _ => return None
@@ -459,7 +429,6 @@ pub fn parse_field_def(tokens: &mut Vec<Token>) -> FieldDef {
     let t = tokens.pop().unwrap();
     match t {
         Token::Identifier(name) => {
-            expect_token(tokens, Token::Colon);
             match tokens.pop().unwrap() {
                 Token::Identifier(type_name) => FieldDef {name, ty: Type::Named(type_name)},
                 Token::Mut => {
@@ -544,6 +513,15 @@ pub fn parse_function_arg(tokens: &mut Vec<Token>) -> (Vec<Type>, Type) {
                     _ => panic!("unexpected {:?}", nnt)
                 }
             },
+            Token::SelfTok => {
+                types.push(Type::SelfT);
+                let nnt = tokens.pop().unwrap();
+                match nnt {
+                    Token::Comma => {},
+                    Token::CloseParen => break,
+                    _ => panic!("unexpected {:?}", nnt)
+                }
+            },
             Token::CloseParen => break,
             _ => panic!("unexpected {:?}", nt)
         }
@@ -563,7 +541,7 @@ pub fn parse_function_decl(tokens: &mut Vec<Token>) -> FunctionDefinition {
     let t = tokens.pop().unwrap();
     match t {
         Token::Identifier(name) => {
-            expect_tokens(tokens, &[Token::Colon, Token::Colon, Token::OpenParen]);
+            expect_tokens(tokens, &[Token::Colon, Token::OpenParen]);
 
             let (arg_types, ret_type) = parse_function_arg(tokens);
 
@@ -655,22 +633,24 @@ pub fn parse_struct(tokens: &mut Vec<Token>) -> Declaration {
                 let mut f = tokens.clone();
                 match f.pop().unwrap() {
                     Token::Identifier(_) => {
-                        expect_token(&mut f, Token::Colon);
                         match f.pop().unwrap() {
                             Token::Identifier(_) => {
                                 fields.push(parse_field_def(tokens));
                             },
                             Token::Mut => {
                                 fields.push(parse_field_def(tokens));
+                            },
+                            Token::Colon => {
+                                funcs.push(parse_function_decl(tokens));
                             }
-                            _ => panic!("")
+                            x => panic!("{:?} is not expected", x)
                         }
                     },
                     Token::CloseCurly => {
                         tokens.pop();
                         return Declaration::StructDef(name, fields, funcs)
-
                     },
+
                     _ => panic!("")
                  }
             }

@@ -24,8 +24,9 @@ pub fn type_check_ast<'a>(sf: &'a SourceFile) -> Globals {
         for field in fields.iter() {
             f.insert(field.name.clone(), Type::from_with_map(&field.ty, &shm));
         };
+        let struct_type = Type::Struct((*name).clone());
         let method_type: FunctionTypes = funcs.iter().map(|func|{
-            create_func_ty(func, &shm)
+            create_method_ty(&struct_type, func,&shm)
         }).collect();
         structs.insert(*name, (Struct{name: (*name).clone(), args: f, methods: HashMap::new()}, method_type));
         methods.insert((*name).clone(), *funcs);
@@ -63,10 +64,24 @@ impl Type {
                 }
             },
             &ast::Type::Cell(ref x) => Type::Cell(Box::new(Type::from_with_map(x.as_ref(), map))),
-            _ => panic!("")
+            _ => panic!("{:?}", ty)
+        }
+    }
+
+    pub fn method_type<T>(ty: &ast::Type, self_type: &Type, map: &HashMap<&String, T>) -> Type {
+        match ty {
+            &ast::Type::SelfT => self_type.clone(),
+            _ => Type::from_with_map(ty, map)
+        }
+    }
+    pub fn get_nested_cell_type(&self)-> Type {
+        match self {
+            &Type::Cell(ref x) => x.as_ref().clone(),
+            _ => self.clone(),
         }
     }
 }
+
 type FunctionTypes<'a> = HashMap<&'a String, FunctionType>;
 type FunctionType = (Vec<Type>, Type);
 
@@ -75,6 +90,15 @@ fn create_func_ty<'a, T>(func: &'a ast::FunctionDefinition, map: &HashMap<&Strin
     let ret = Type::from_with_map( &func.ret_type, map);
     let arg_types:Vec<Type> = func.arg_types.iter().map(|arg| {
         Type::from_with_map(arg,map)
+    }).collect();
+    (name, (arg_types, ret))
+}
+
+fn create_method_ty<'a, T>(stru: &Type, func: &'a ast::FunctionDefinition, map: &HashMap<&String, T>) -> (&'a String, FunctionType) {
+    let name = &func.name;
+    let ret = Type::method_type( &func.ret_type, stru, map);
+    let arg_types:Vec<Type> = func.arg_types.iter().map(|arg| {
+        Type::method_type(arg,stru,map)
     }).collect();
     (name, (arg_types, ret))
 }
@@ -179,9 +203,10 @@ impl<'a> TypeChecker<'a> {
     fn eval_operator(&self, op: &ast::BinaryOperator, left: &ast::Expr, right: &ast::Expr, env: &Environment) -> Type {
         let l = self.eval_expr(left, env);
         let r = self.eval_expr(right, env);
+
         match op {
             &ast::BinaryOperator::Add => {
-                match (l.1, r.1) {
+                match (l.1.get_nested_cell_type(), r.1.get_nested_cell_type(),) {
                     (Type::Int, Type::Int) => Type::Int,
                     x => panic!("{:?} is not implemented", x)
                 }
@@ -209,7 +234,7 @@ impl<'a> TypeChecker<'a> {
                 match env.get(name) {
                     Some(&Type::Struct(ref name)) => self.type_from_struct_call(name, field),
                     Some(&Type::Cell(box Type::Struct(ref name))) => self.type_from_struct_call(name, field),
-                    x => panic!("method call on none struct, {:?} is not supported", x)
+                    x => panic!("method call on none struct, {:?} is not supported, on variable {:?}", x, name)
                 }
             },
             x => panic!("{:?} is not implermented", x)
@@ -221,13 +246,21 @@ impl<'a> TypeChecker<'a> {
             match statement {
                 &ast::Statement::Let(ref name, ref expr) => {
                     let (expr, ty) = self.eval_expr(expr, env);
-                    env.insert(name, ty.clone());
-                    Statement::Let {name: name.clone(), ty, expr: Box::new(expr)}
+                    let nty: Type = match ty {
+                        Type::Cell(ref t) => t.as_ref().clone(),
+                        x => x,
+                    };
+                    env.insert(name, nty.clone());
+                    Statement::Let {name: name.clone(), ty: nty, expr: Box::new(expr)}
                 },
                 &ast::Statement::LetMut(ref name, ref expr) => {
                     let (expr, ty) = self.eval_expr(expr, env);
-                    env.insert(name, Type::Cell(Box::new(ty.clone())));
-                    Statement::Let {name: name.clone(), ty: Type::Cell(Box::new(ty)), expr: Box::new(expr)}
+                    let nty: Type = match ty {
+                        Type::Cell(ref t) => t.as_ref().clone(),
+                        x => x,
+                    };
+                    env.insert(name, Type::Cell(Box::new(nty.clone())));
+                    Statement::Let {name: name.clone(), ty: Type::Cell(Box::new(nty)), expr: Box::new(expr)}
                 }
                 &ast::Statement::Return(ref expr) => {
                     let ty = self.eval_expr(expr, env);
@@ -237,25 +270,12 @@ impl<'a> TypeChecker<'a> {
                         panic!("")
                     }
                 },
-                &ast::Statement::Assignment(ref target, ref expr) => {
-                    let (n_expr, ty) = self.eval_expr(expr, env);
-                    match self.eval_expr(target, env) {
-                        (ref t_expr, Type::Cell(ref c_ty)) => {
-                            if **c_ty == ty {
-                                Statement::Assignment{target: Box::new(t_expr.clone()), expr: Box::new(n_expr.clone())}
-                            } else {
-                                panic!("the expression yields the wrong type")
-                            }
-                        },
-                        _ => panic!("")
-                    }
-                }
-                &ast::Statement::Assignment_2(ref l_expr, ref expr) => {
+                &ast::Statement::Assignment(ref l_expr, ref expr) => {
                     let (n_expr, ty) = self.eval_expr(expr, env);
                     match self.eval_l_expr(l_expr, env) {
                         (ref t_expr, Type::Cell(ref c_ty)) => {
                             if **c_ty == ty {
-                                Statement::Assignment2{l_expr: Box::new(t_expr.clone()), expr: Box::new(n_expr.clone())}
+                                Statement::Assignment{l_expr: Box::new(t_expr.clone()), expr: Box::new(n_expr.clone())}
                             } else {
                                 panic!("the expression yields the wrong type")
                             }
