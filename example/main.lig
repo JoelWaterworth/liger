@@ -13,6 +13,8 @@ struct Bar {
 
 main:() -> IO
 main = {
-    let mut y = Bar{x: Foo{x: 1}};
-    y.x.plah(5);
+    let mut y = Foo{x: 1};
+    let mut x = y;
+    x.x = 6;
+    print(y.x);
 }
