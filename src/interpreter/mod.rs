@@ -2,12 +2,11 @@ use type_checker::typed_ast::*;
 use parsing::ast::{BinaryOperator, Lit};
 use std::collections::HashMap;
 use std::borrow::Borrow;
-use std::cell;
-use std::fmt;
 use std::rc::Rc;
 use std::cell::Cell;
 
 type Ref<T>  = Rc<Cell<T>>;
+type RData = Ref<RData>;
 
 #[derive(Debug, Clone)]
 enum Data {
@@ -17,6 +16,7 @@ enum Data {
     Unit,
     Bool(bool),
     StructVal(String, HashMap<String, Data>, HashMap<String, Data>), //name, fields, method table
+    Class(String, HashMap<String, Data>), //name, fields
 }
 
 #[derive(Clone, Debug)]
@@ -26,6 +26,7 @@ struct Environment {
 
 pub fn interpret_source_file(tast: Globals) {
     let mut globals:HashMap<String, Data> = HashMap::new();
+    let mut types:HashMap<String,HashMap<String,Data>> = HashMap::new();
 
     for s in tast.structs.into_iter() {
         let args_data: HashMap<String,Data> =  s.args.iter().map(|(name, _)| {
@@ -36,7 +37,7 @@ pub fn interpret_source_file(tast: Globals) {
             (name, Data::Closure(f) )
         }).collect();
 
-        globals.insert(s.name.clone(), Data::StructVal(s.name.clone(),args_data, functions ));
+        types.insert(s.name.clone(), functions);
     }
 
     for f in tast.functions.iter() {
@@ -44,13 +45,14 @@ pub fn interpret_source_file(tast: Globals) {
     }
 
     let main_func = globals.get("main").unwrap().clone();
-    let exe = Executor{globals};
+    let exe = Executor{globals, types};
     exe.apply(&main_func, Vec::new());
 }
 
 #[derive(Clone, Debug)]
 struct Executor {
     globals: HashMap<String,Data>,
+    types: HashMap<String,HashMap<String,Data>>,
 }
 
 impl Executor {
@@ -89,19 +91,14 @@ impl Executor {
             },
             &Data::Method(ref var, ref ty) => {
                 match var.borrow() {
-                    &Data::StructVal(ref name, ref fields, _) => {
-                        let funcs = match self.globals.get(name) {
-                            Some(&Data::StructVal(_, _, ref f)) => f,
-                            _ => panic!("")
-                        };
+                    &Data::Class(ref name, ref fields) => {
+                        let funcs = self.types.get(name).unwrap();
                         match fields.get(ty) {
                             Some(f) => return f.clone(),
                             None => {
                                 match funcs.get(ty) {
                                     Some(fun) => {
-                                        let mut m_args = args;
-                                        m_args.insert(0 , *var.clone());
-                                        self.apply( fun, m_args)
+                                        self.apply( fun, args)
                                     },
                                     None => panic!("{:?} is unkown. {:?} {:?} could be used instead", ty, fields, funcs)
                                 }
@@ -124,7 +121,7 @@ impl Executor {
                     &BinaryOperator::Add => {
                         match (l, r) {
                             (Data::Int(x), Data::Int(y)) => return Data::Int(x+y),
-                            _ => panic!("type error")
+                            (x, y) => panic!("type error with {:?}, {:?}", x, y)
                         }
                     }
                     &BinaryOperator::Sub => {
@@ -170,7 +167,7 @@ impl Executor {
                         for &(ref name, ref val) in args.iter() {
                             fields.insert(name.clone(), self.eval(env, &val));
                         };
-                        Data::StructVal(x.clone(), fields, HashMap::new())
+                        Data::Class(x.clone(), fields)
                     },
                     _ => panic!("")
                 }
@@ -246,7 +243,7 @@ impl Executor {
             &LExpr::Var(ref name) => env.vars.get_mut(name).unwrap(),
             &LExpr::MethodCall(ref var, ref field, _) => {
                 match self.eval_l_expr(var, env) {
-                    &mut Data::StructVal(ref name, ref mut fields, _) => {
+                    &mut Data::Class(ref name, ref mut fields) => {
                         fields.get_mut(field).unwrap()
                     }
                     x => panic!("{:?}", x)

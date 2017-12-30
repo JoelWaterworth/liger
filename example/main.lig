@@ -1,14 +1,18 @@
 struct Foo {
     x mut i64
 
-    plah:(Self) -> i64
-    plah x = {
-        return x.x + 1;
+    plah:(Foo, i64) -> IO
+    plah x y = {
+        print(5);
     }
+}
+
+struct Bar {
+    x Foo
 }
 
 main:() -> IO
 main = {
-    let mut y = Foo{x: 1};
-    print(y.plah());
+    let mut y = Bar{x: Foo{x: 1}};
+    y.x.plah(5);
 }

@@ -71,9 +71,12 @@ fn clone_nested<T: Clone>(x: Option<&T>) -> Option<T> {
     }
 }
 
-fn function_args(tokens: &mut Vec<Token>) -> Vec<Expr> {
+fn function_args(tokens: &mut Vec<Token>) -> Option<Vec<Expr>> {
     let mut v = Vec::new();
-    expect_token(tokens, Token::OpenParen);
+    if tokens.pop() != Some(Token::OpenParen) {
+        return None
+    };
+
     loop {
         let t = clone_nested(tokens.last()).unwrap();
         match t {
@@ -91,7 +94,7 @@ fn function_args(tokens: &mut Vec<Token>) -> Vec<Expr> {
             _ => {}
         }
     }
-    v
+    Some(v)
 }
 
 fn parse_expr_0(tokens: &mut Vec<Token>) -> Expr {
@@ -100,7 +103,7 @@ fn parse_expr_0(tokens: &mut Vec<Token>) -> Expr {
         let n = clone_nested(tokens.last());
         match n {
             Some(Token::OpenParen) => {
-                let v = function_args(tokens);
+                let v = function_args(tokens).unwrap();
                 output = Expr::App(Box::new(output), v)
             },
             Some(Token::Dot) => {
@@ -113,7 +116,7 @@ fn parse_expr_0(tokens: &mut Vec<Token>) -> Expr {
                 let n = clone_nested(tokens.last());
                 match n {
                     Some(Token::OpenParen) => {
-                        let v = function_args(tokens);
+                        let v = function_args(tokens).unwrap();
                         output = Expr::MethodCall(Box::new(output), name, v)
                     }
                     _ => output = Expr::MethodCall(Box::new(output), name, Vec::new())
@@ -287,29 +290,6 @@ fn expect_tokens(tokens: &mut Vec<Token>, expected_tokens: &[Token]) {
     }
 }
 
-pub fn method_calls(tokens: &mut Vec<Token>, tar: Expr) -> Statement {
-    let mut  target = tar;
-    loop {
-        tokens.pop();
-        match tokens.pop().clone() {
-            Some(Token::Identifier(name)) => {
-                match clone_nested(tokens.last()) {
-                    Some(Token::OpenParen) => {
-                        let args = function_args(tokens);
-                        let nm = clone_nested(tokens.last());
-                        match nm {
-                            Some(Token::Dot) => target = Expr::MethodCall(Box::new(target), name, args),
-                            _ => return Statement::MethodCall(Box::new(target), name, args)
-                        }
-                    }
-                    t => panic!("expected name found {:?}", t)
-                }
-            }
-            t => panic!("expected name found {:?}", t)
-        }
-    }
-}
-
 pub fn expect_identifier(tokens: &mut Vec<Token>) -> String {
     let t = tokens.pop().unwrap();
     match t {
@@ -397,16 +377,46 @@ fn parse_assignment(tokens: &mut Vec<Token>) -> Option<Statement> {
 fn parse_function_call(tokens: &mut Vec<Token>) -> Option<Statement> {
     match tokens.pop() {
         Some(Token::Identifier(func)) => {
-            let args = function_args(tokens);
-            expect_token(tokens, Token::SemiColon);
-            Some(Statement::FunctionCall(Box::new(Expr::Var(func)), args))
+            if let Some(args) = function_args(tokens) {
+                expect_token(tokens, Token::SemiColon);
+                Some(Statement::FunctionCall(Box::new(Expr::Var(func)), args))
+            } else {
+                return None
+            }
         }
         _ => return None
     }
 }
 
 fn parse_method_call(tokens: &mut Vec<Token>) -> Option<Statement> {
-    None
+    let mut method = None;
+    match tokens.pop() {
+        Some(Token::Identifier(var)) => {
+            let mut expr = Expr::Var(var);
+            loop {
+                match tokens.pop() {
+                    Some(Token::SemiColon) => return method,
+                    Some(Token::Dot) => {
+                        let field = expect_identifier(tokens);
+                        match clone_nested(tokens.last()) {
+                            Some(Token::OpenParen) => {
+                                let args = function_args(tokens).unwrap();
+                                method = Some(Statement::MethodCall(Box::new(expr.clone()), field.clone(), args.clone()));
+                                expr = Expr::MethodCall(Box::new(expr.clone()), field, args.clone());
+                            },
+                            _ => {
+                                method = Some(Statement::MethodCall(Box::new(expr.clone()), field.clone(), Vec::new()));
+                                expr = Expr::MethodCall(Box::new(expr.clone()), field, Vec::new());
+                            }
+                        }
+                    },
+                    _ => return None
+                }
+            };
+            method
+        },
+        _ => return None
+    }
 }
 
 fn parse_if_statement(tokens: &mut Vec<Token>) -> (Expr, Vec<Statement>, Vec<Statement>) {

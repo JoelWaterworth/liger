@@ -182,19 +182,19 @@ impl<'a> TypeChecker<'a> {
             },
             &ast::Expr::Lit(Lit::Integral(n)) => (Expr::Lit(Lit::Integral(n.clone())), Type::Int),
             &ast::Expr::Var(ref n) => (Expr::Var(n.clone()), env.get(n).unwrap().clone()),
-            &ast::Expr::MethodCall(ref target, ref field, ref args) =>
-                (Expr::MethodCall(Box::new(self.eval_expr(target, env).0), field.clone(), args.iter().map(|e| {
-                    self.eval_expr(e, env).0
-                }).collect()), self.eval_method_call(target, field, args, env)),
+            &ast::Expr::MethodCall(ref target, ref field, ref args) => {
+                let (eval_target, arg_expr, ret_type) = self.eval_method_call(&target, field, &args, env);
+                (Expr::MethodCall(Box::new(eval_target.0), field.clone(), arg_expr), ret_type)
+            },
             &ast::Expr::App(ref target, ref args) => {
                 let (t, a, r) = self.function_call(target, args, env);
                 (Expr::App(Box::new(t), a), r)
             },
             &ast::Expr::BinaryExpr(ref op, ref left, ref right) => (
-                    Expr::BinaryExpr(op.clone(),
-                                  Box::new(self.eval_expr(left, env).0),
-                                  Box::new(self.eval_expr(right, env).0)),
-                 self.eval_operator(op, left, right, env)
+                Expr::BinaryExpr(op.clone(),
+                                 Box::new(self.eval_expr(left, env).0),
+                                 Box::new(self.eval_expr(right, env).0)),
+                self.eval_operator(op, left, right, env)
                 ),
             x => panic!("{:?} is not implemented", x)
         }
@@ -215,30 +215,40 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    fn type_from_struct_call(&self, name: &String, field: &String) -> Type {
+    fn type_from_struct_call(&self, name: &String, field: &String, args: &Vec<(Expr, Type)>) -> Type {
         let s = self.structs.get(name).unwrap();
         match s.0.args.get(field) {
-            Some(x) => return x.clone(),
+            Some(x) => return x.clone(),//field
             None => {
                 match s.1.get(field) {
-                    Some(&(ref arg_ty, ref ret_ty)) => ret_ty.clone(),
-                    _ => panic!("field not found")
+                    Some(&(ref arg_ty, ref ret_ty)) => {
+                        arg_ty.iter().zip(args.iter()).for_each(|(x,&(ref expr, ref ty))|{
+                            if *x != *ty {
+                                panic!("wrong type supplied on field {}", field)
+                            }
+                        });
+                        ret_ty.clone()
+                    },//function
+                    _ => panic!("field not found {:?}", field)
                 }
             }
         }
     }
 
-    fn eval_method_call(&self, target: &ast::Expr, field: &String, args: &Vec<ast::Expr>, env: &Environment) -> Type {
-        match target {
-            &ast::Expr::Var(ref name) => {
-                match env.get(name) {
-                    Some(&Type::Struct(ref name)) => self.type_from_struct_call(name, field),
-                    Some(&Type::Cell(box Type::Struct(ref name))) => self.type_from_struct_call(name, field),
-                    x => panic!("method call on none struct, {:?} is not supported, on variable {:?}", x, name)
-                }
-            },
-            x => panic!("{:?} is not implermented", x)
-        }
+    fn eval_method_call(&self, target: &ast::Expr, field: &String, args: &Vec<ast::Expr>, env: &Environment) -> ((Expr, Type), Vec<Expr>, Type) {
+        let eval_target = self.eval_expr(target, env);
+        let mut eval_args: Vec<(Expr, Type)> = args.iter().map(|e| {
+            self.eval_expr(e, env)
+        }).collect();
+        eval_args.insert(0, eval_target.clone());
+        let (arg_expr, _): (Vec<_>, Vec<_>) = eval_args.iter().cloned().unzip();
+
+        let ret_type = match eval_target.1 {
+            Type::Struct(ref name) => self.type_from_struct_call(name, field, &eval_args),
+            Type::Cell(box Type::Struct(ref name)) => self.type_from_struct_call(name, field, &eval_args),
+            ref x => panic!("{:?} is not implermented", x),
+        };
+        (eval_target, arg_expr, ret_type)
     }
 
     fn eval_statements<'b>(&self, statements: &'b Vec<ast::Statement>, env: &mut Environment<'b> ,ret_type: &Type) -> Vec<Statement> {
@@ -282,12 +292,16 @@ impl<'a> TypeChecker<'a> {
                         },
                         _ => panic!("")
                     }
-                }
+                },
                 &ast::Statement::FunctionCall(ref expr, ref args) => {
                     let (t, a, r) = self.function_call(expr,args,env);
                     Statement::FunctionCall(Box::new(t), a)
-                }
-                _ => unimplemented!()
+                },
+                &ast::Statement::MethodCall(ref expr, ref field, ref args) => {
+                    let (eval_target, arg_expr, ret_type) = self.eval_method_call(expr, field, &args, env);
+                    Statement::MethodCall(Box::new(eval_target.0), field.clone(), arg_expr)
+                },
+                x => unimplemented!("{:?}", x)
             }
         }).collect()
     }
@@ -302,7 +316,7 @@ impl<'a> TypeChecker<'a> {
                 let (t_l_expr, ty) = self.eval_l_expr(l_expr, env);
                 match ty {
                     Type::Cell(box Type::Struct(ref name)) => {
-                        (LExpr::MethodCall(Box::new(t_l_expr), field.clone(), Vec::new()), self.type_from_struct_call(name, field))
+                        (LExpr::MethodCall(Box::new(t_l_expr), field.clone(), Vec::new()), self.type_from_struct_call(name, field, &Vec::new()))
                     }
                     _ => panic!("not implemented {:?}", ty)
                 }
@@ -359,263 +373,3 @@ impl<'a> TypeChecker<'a> {
         Globals { functions, structs}
     }
 }
-
-/*
-pub fn type_check_source_file(sf: &SourceFile) {
-    let mut type_checker = TypeChecker{globals: HashMap::new(), structs: HashMap::new()};
-    type_checker.globals.insert(String::from("print"), Type::Function(vec![Type::Int], Box::new(Type::Unit)));
-    let mut fhm = Vec::new();
-    let mut hm = HashMap::new();
-    for n in sf.decls.iter() {
-        match n {
-            &Declaration::FunctionDef(ref func) => {
-                fhm.push(func.clone());
-            },
-            &Declaration::StructDef(ref name, ref fields, ref funcs) => {
-                hm.insert(name.clone(), (fields.clone(), funcs.clone()));
-            }
-        };
-    };
-    let mut methods = Vec::new();
-
-    for (name, &(ref fields, ref func)) in hm.iter() {
-        let mut fds = HashMap::new();
-        for field in fields.iter() {
-            let ty = match field.ty {
-                ast::Type::Named(ref x) => match x.as_str() {
-                    "i64" => Type::Int,
-                    _ => {
-                        if hm.contains_key(x) {
-                            Type::Struct(x.clone())
-                        } else {
-                            panic!("{:?} could not be found", x)
-                        }
-                    }
-                },
-                _ => panic!("")
-            };
-            match fds.insert(field.name.clone(), ty) {
-                Some(x) => panic!("{:?}", x),
-                None => {}
-            };
-        }
-
-        match type_checker.structs.insert(name.clone(), (fds, HashMap::new()))  {
-            Some(x) => panic!("{:?}", x),
-            None => {}
-        };
-    };
-    for (name, &(_, ref func)) in hm.iter() {
-        let mut functions = HashMap::new();
-        for f in func.iter() {
-            let mut arg_types = Vec::new();
-            for arg in f.arg_types.iter() {
-                let ty = type_checker.eval_type(arg);
-                arg_types.push(ty);
-            }
-            let ret_type = type_checker.eval_type(&f.ret_type);
-            functions.insert(f.name.clone(), Type::Function(arg_types, Box::new(ret_type)));
-        }
-        type_checker.structs.get_mut(name).unwrap().1 = functions;
-        methods.push((name.clone(), func.clone()));
-    }
-
-    for func in fhm.iter() {
-        let mut arg_types = Vec::new();
-        for arg in func.arg_types.iter() {
-            let ty = type_checker.eval_type(arg);
-            arg_types.push(ty);
-        }
-        let ret_type = type_checker.eval_type(&func.ret_type);
-        type_checker.globals.insert(func.name.clone(), Type::Function(arg_types, Box::new(ret_type)));
-    };
-    type_checker.eval_functions(&fhm);
-    type_checker.eval_methods(&methods);
-}
-
-#[derive(Clone, Debug)]
-struct TypeChecker {
-    globals: HashMap<String,Type>,
-    structs: HashMap<String,(HashMap<String, Type>, HashMap<String, Type>)>,
-}
-
-fn expect_function(typ: &Type) -> (Vec<Type>, Box<Type>) {
-    match typ {
-        &Type::Function(ref ty, ref ret) => (ty.clone(), ret.clone()),
-        _ => panic!("")
-    }
-}
-
-impl TypeChecker {
-
-    fn eval_body(&self, func_def: &FunctionDefinition, statements: &Vec<Statement>,env: &mut Environment) {
-        let return_type = self.eval_type(&func_def.ret_type);
-        for statement in statements.iter() {
-            match statement {
-                &Statement::Let(ref name, ref expr) => {
-                    let expr_type = self.eval_expr(env, expr);
-                    env.insert(name.clone(), expr_type);
-                },
-                &Statement::Return(ref expr) => {
-                    let expr_type = self.eval_expr(env, expr);
-                    if expr_type != return_type {
-                        panic!("expected {:?} not {:?}", return_type, expr_type)
-                    }
-                }
-                &Statement::FunctionCall(ref func, ref args) => {self.function_call(func, args, env);},
-                _ => panic!("{:?} is not implemented", statement)
-            }
-        };
-    }
-
-    pub fn function_call(&self, func: &Expr, args: &Vec<Expr>, env: &Environment) -> Type {
-        match func {
-            &Expr::Var(ref name) => {
-                let ty = self.globals.get(name);
-                match ty {
-                    Some(&Type::Function(ref arg_types, ref ret_type)) => {
-                        for (arg, ty) in args.iter().zip(arg_types.iter()) {
-                            let eval_arg = self.eval_expr(env, arg);
-                            if ty.clone() != eval_arg {
-                                panic!("expected {:?} not {:?}", ty, eval_arg)
-                            }
-                            return *ret_type.clone()
-                        }
-                        panic!("")
-                    },
-                    _ => panic!("")
-                }
-            },
-            _ => panic!("")
-        }
-    }
-
-    fn eval_method_call(&self, target: &Expr, field: &String, args: &Vec<Expr>, env: &Environment) -> Type {
-        match target {
-            &Expr::Var(ref name) => {
-                match env.get(name) {
-                    Some(&Type::Struct(ref name)) => {
-                        let s = self.structs.get(name).unwrap();
-                        match s.0.get(field) {
-                            Some(x) => return x.clone(),
-                            None => {
-                                match s.1.get(field) {
-                                    Some(&Type::Function(ref arg_ty, ref ret_ty)) => *ret_ty.clone(),
-                                    _ => panic!("")
-                                }
-                            }
-                        }
-                    }
-                    _ => panic!("")
-                }
-            },
-            x => panic!("{:?} is not implermented", x)
-        }
-    }
-
-    pub fn eval_functions(&self, funcs: &Vec<FunctionDefinition>) {
-        for func in funcs.iter() {
-            let ty = expect_function(self.globals.get(&func.name).unwrap());
-            for case in func.cases.iter() {
-                let mut env:Environment = HashMap::new();
-                for (n, case_arg) in case.matches.iter().enumerate() {
-                    match case_arg {
-                        &Match::WildCard(ref arg) => {
-                            let x = match ty.0.get(n) {
-                                Some(y) => y.clone(),
-                                None => panic!("{:?} \n {:?}", func, ty)
-                            };
-                            env.insert(arg.clone(), ty.0[n].clone());
-                        },
-                        _ => panic!("")
-                    }
-                };
-                self.eval_body(func, &case.body, &mut env);
-            }
-        }
-    }
-
-    pub fn eval_methods(&self, structs: &Vec<(String, Vec<FunctionDefinition>)>) {
-        for &(ref name, ref funcs) in structs.iter() {
-            let str = &self.structs.get(name).unwrap().1;
-            for func in funcs.iter() {
-                let ty = str.get(&func.name).unwrap();
-                let (arg_type, ret_type) = match ty {
-                    &Type::Function(ref args, ref ret) => (args, ret),
-                    _ => panic!("")
-                };
-
-                for case in func.cases.iter() {
-                    let mut env:Environment = HashMap::new();
-                    for (n, case_arg) in case.matches.iter().enumerate() {
-                        match case_arg {
-                            &Match::WildCard(ref arg) => {
-                                env.insert(arg.clone(), arg_type[n].clone());
-                            },
-                            _ => panic!("")
-                        }
-                    };
-                    self.eval_body(func, &case.body, &mut env);
-                }
-            }
-        }
-    }
-
-    fn eval_type(&self, ty: &ast::Type) -> Type {
-        match ty {
-            &ast::Type::Named(ref x) => match x.as_str() {
-                "i64" => Type::Int,
-                "IO" => Type::Unit,
-                _ => {
-                    if self.structs.contains_key(x) {
-                        Type::Struct(x.clone())
-                    } else {
-                        panic!("{:?} could not be found", x)
-                    }
-                }
-            },
-            &ast::Type::SelfT => panic!("")
-        }
-    }
-    fn eval_expr(&self, env: &Environment, expr: &Expr)-> Type {
-        match expr {
-            &Expr::StructInit(ref ty, ref args) => {
-                match ty {
-                    &ast::Type::Named(ref x) => {
-                        let s = &self.structs.get(x).unwrap().0;
-                        for &(ref arg_name, ref arg_expr) in args.iter() {
-                            let arg_type = s.get(arg_name).unwrap();
-                            let expr_type = self.eval_expr(env, arg_expr);
-                            if arg_type != &expr_type {
-                                panic!("{:?} should be {:?}, not {:?}", arg_name, arg_type, expr_type)
-                            }
-                        }
-                        Type::Struct(x.clone())
-                    },
-                    &ast::Type::SelfT => panic!("")
-                }
-            },
-            &Expr::Lit(Lit::Integral(_)) => Type::Int,
-            &Expr::Var(ref n) => env.get(n).unwrap().clone(),
-            &Expr::MethodCall(ref target, ref field, ref args) => self.eval_method_call(target, field, args, env),
-            &Expr::App(ref target, ref args) => self.function_call(target, args, env),
-            &Expr::BinaryExpr(ref op, ref left, ref right) => self.eval_operator(op, left, right, env),
-            x => panic!("{:?} is not implemented", x)
-        }
-    }
-
-    fn eval_operator(&self, op: &BinaryOperator, left: &Expr, right: &Expr, env: &Environment) -> Type {
-        let l = self.eval_expr(env, left);
-        let r = self.eval_expr(env, right);
-        match op {
-            &BinaryOperator::Add => {
-                match (l,r) {
-                    (Type::Int, Type::Int) => Type::Int,
-                    x => panic!("{:?} is not implemented", x)
-                }
-            },
-            x => panic!("{:?} is not implemented", x)
-        }
-    }
-}
-*/
