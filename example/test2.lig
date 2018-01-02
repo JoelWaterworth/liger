@@ -1,0 +1,29 @@
+trait Add {
+    add:(Self, Self) -> Self;
+}
+
+struct Foo {
+    x mut i64
+
+    plah:(Self, i64) -> IO
+    plah x y = {
+        print(5);
+    }
+    trait Add {
+        add:(Self, Self) -> Self
+        plah a b = {
+            return Foo{x: a.x + b.x}
+        }
+    }
+}
+
+plah:<A: Add>(A, A) -> A
+plah a b = return a + b;
+
+main:() -> IO
+main = {
+    let y = Foo{x: 1};
+    let x = Foo{x: 2};
+    let z = plah(x,y);
+    print(z.x);
+}

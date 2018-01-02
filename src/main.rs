@@ -12,11 +12,14 @@ use std::io::Read;
 use std::path::Path;
 
 mod parsing;
-mod interpreter;
+//mod interpreter;
 mod type_checker;
+mod compiler;
+
 use parsing::*;
 use type_checker::type_check_ast;
-use interpreter::interpret_source_file;
+//use interpreter::interpret_source_file;
+use compiler::compile;
 
 fn main() {
     let path = Path::new("example/main.lig");
@@ -27,5 +30,7 @@ fn main() {
     let sf = parse(s.as_ref());
     let ty = type_check_ast(&sf);
     println!("\n {:?}", ty);
-    interpret_source_file(ty);
+    compile(ty);
+
+    //interpret_source_file(ty);
 }

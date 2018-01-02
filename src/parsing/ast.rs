@@ -100,6 +100,7 @@ impl Type {
 #[derive(Clone, Debug)]
 pub struct FunctionDefinition {
     pub name: String,
+    pub generics: Vec<(Type, Vec<Type>)>,
     pub arg_types: Vec<Type>,
     pub ret_type: Type,
     pub cases: Vec<FuncCase>
@@ -109,7 +110,7 @@ pub struct FunctionDefinition {
 pub enum Declaration {
     FunctionDef(FunctionDefinition),
     StructDef(String, Vec<FieldDef>, Vec<FunctionDefinition>),
-    //trait
+    Trait(String, Vec<FunctionDefinition>),
     //enum
 }
 

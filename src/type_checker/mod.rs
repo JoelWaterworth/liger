@@ -14,6 +14,7 @@ pub fn type_check_ast<'a>(sf: &'a SourceFile) -> Globals {
         match decl {
             &ast::Declaration::FunctionDef(ref x) => {functions.push(x);},
             &ast::Declaration::StructDef(ref name, ref fields, ref methods) => {shm.insert(name, (fields, methods));},
+            x => panic!("{:?}", x)
         };
     };
     let mut structs = HashMap::new();
@@ -180,22 +181,29 @@ impl<'a> TypeChecker<'a> {
                     &ast::Type::Cell(ref ty) => panic!("Cell unimplemented"),
                 }
             },
-            &ast::Expr::Lit(Lit::Integral(n)) => (Expr::Lit(Lit::Integral(n.clone())), Type::Int),
-            &ast::Expr::Var(ref n) => (Expr::Var(n.clone()), env.get(n).unwrap().clone()),
+            &ast::Expr::Lit(Lit::Integral(n)) => (Expr::Lit(Lit::Integral(n.clone()), Type::Int), Type::Int),
+            &ast::Expr::Var(ref n) => {
+                let ty = env.get(n).unwrap().clone();
+                (Expr::Var(n.clone(), ty.clone()), ty)
+            },
             &ast::Expr::MethodCall(ref target, ref field, ref args) => {
                 let (eval_target, arg_expr, ret_type) = self.eval_method_call(&target, field, &args, env);
-                (Expr::MethodCall(Box::new(eval_target.0), field.clone(), arg_expr), ret_type)
+
+                (Expr::MethodCall(Box::new(eval_target.0), field.clone(), arg_expr, ret_type.clone()), ret_type)
             },
             &ast::Expr::App(ref target, ref args) => {
                 let (t, a, r) = self.function_call(target, args, env);
-                (Expr::App(Box::new(t), a), r)
+                (Expr::App(Box::new(t), a, r.clone()), r)
             },
-            &ast::Expr::BinaryExpr(ref op, ref left, ref right) => (
-                Expr::BinaryExpr(op.clone(),
-                                 Box::new(self.eval_expr(left, env).0),
-                                 Box::new(self.eval_expr(right, env).0)),
-                self.eval_operator(op, left, right, env)
-                ),
+            &ast::Expr::BinaryExpr(ref op, ref left, ref right) => {
+                let r = self.eval_operator(op, left, right, env);
+                (Expr::BinaryExpr(op.clone(),
+                                     Box::new(self.eval_expr(left, env).0),
+                                     Box::new(self.eval_expr(right, env).0),
+                                     r.clone()),
+                    r
+                )
+            },
             x => panic!("{:?} is not implemented", x)
         }
     }
@@ -339,7 +347,7 @@ impl<'a> TypeChecker<'a> {
                             }
                             typed_args.push(eval_arg.0);
                         };
-                        return ( Expr::Var(name.clone()), typed_args, ret_type.clone())
+                        return ( Expr::Var(name.clone(), ret_type.clone()), typed_args, ret_type.clone())
                     },
                     None => {
                         match self.typed_functions.get(name) {
@@ -352,7 +360,7 @@ impl<'a> TypeChecker<'a> {
                                     }
                                     typed_args.push(eval_arg.0);
                                 };
-                                return ( Expr::Var(name.clone()), typed_args, *ret_ty.clone())
+                                return ( Expr::Var(name.clone(), *ret_ty.clone()), typed_args, *ret_ty.clone())
                             },
                             _ => panic!("")
                         }

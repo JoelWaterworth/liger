@@ -7,8 +7,9 @@ pub fn parse_source_file(tokens: &mut Vec<Token>) -> SourceFile {
     loop {
         let n = clone_nested(tokens.last());
         match n.clone() {
-            Some(Token::Identifier(_)) => decls.push(Declaration::FunctionDef( parse_function_decl(tokens))),
+            Some(Token::Identifier(_)) => decls.push(Declaration::FunctionDef( parse_function(tokens))),
             Some(Token::Struct) => decls.push(parse_struct(tokens)),
+            Some(Token::Trait) => decls.push(parse_trait(tokens)),
             Some(Token::Import) => imports.push(parse_import(tokens)),
             Some(_) => panic!("unexpect {:?} in parse_source_file", n),
             None => break
@@ -452,60 +453,119 @@ pub fn parse_field_def(tokens: &mut Vec<Token>) -> FieldDef {
     }
 }
 
-pub fn parse_method(tokens: &mut Vec<Token>) -> FunctionDefinition {
-    let t = tokens.pop().unwrap();
-    match t {
-        Token::Identifier(name) => {
-            expect_token(tokens, Token::Colon);
-            expect_token(tokens, Token::Colon);
-            expect_token(tokens, Token::OpenParen);
-
-            let mut types = Vec::new();
-
-            loop {
-                let nt = tokens.pop().unwrap();
-                match nt {
+pub fn parse_function_type(tokens: &mut Vec<Token>) -> FunctionDefinition {
+    let name = expect_identifier(tokens);
+    expect_token(tokens, Token::Colon);
+    let mut generics: Vec<(Type, Vec<Type>)> = Vec::new();
+    match tokens.last().unwrap().clone() {
+        Token::GT => {
+            'inner: loop {
+                match tokens.pop().unwrap() {
                     Token::Identifier(ty) => {
-                        types.push(Type::Named(ty));
-                        let nnt = tokens.pop().unwrap();
-                        match nnt {
-                            Token::Comma => {},
-                            Token::CloseParen => break,
-                            _ => panic!("unexpected {:?}", nnt)
+                        match clone_nested(tokens.last()) {
+                            Some(Token::Colon) => {
+                                tokens.pop();
+                                let mut traits = Vec::new();
+                                loop {
+                                    match tokens.pop().unwrap() {
+                                        Token::Identifier(ty) => {
+                                            traits.push(Type::Named(ty));
+                                            match clone_nested(tokens.last()) {
+                                                Some(Token::Add) => {},
+                                                _ => {
+                                                    break
+                                                }
+                                            };
+                                        },
+                                        x => panic!("{:?}", x)
+                                    };
+                                };
+                                generics.push((Type::Named(ty), traits))
+                            },
+                            _ => {
+                                generics.push((Type::Named(ty), Vec::new()))
+                            }
+                        };
+                        match clone_nested(tokens.last()) {
+                            Some(Token::Comma) => {
+                                tokens.pop();
+                            },
+                            Some(Token::LT) => {
+                                tokens.pop();
+                                break
+                            },
+                            x => panic!("{:?}", x)
                         }
                     },
+                    Token::LT => break,
+                    x => panic!("{:?}", x)
+                }
+            }
+        },
+        _ => {}
+    };
+    expect_token(tokens, Token::OpenParen);
+
+    let mut types = Vec::new();
+
+    loop {
+        match tokens.pop().unwrap() {
+            Token::Identifier(ty) => {
+                types.push(Type::Named(ty));
+                match tokens.pop().unwrap() {
+                    Token::Comma => {},
                     Token::CloseParen => break,
-                    _ => panic!("")
+                    x => panic!("unexpected {:?}", x)
                 }
-            }
-            expect_token(tokens, Token::RightArrow);
-
-            let nt = tokens.pop().unwrap();
-
-            let ret = match nt {
-                Token::Identifier(r) => r,
-                _ => panic!("expected return type")
-            };
-
-            let mut cases = Vec::new();
-
-            loop {
-                let nc = clone_nested(tokens.last());
-                match nc {
-                    Some(Token::Identifier(x)) => {
-                        if x != name {
-                            break
-                        }
-                        tokens.pop();
-                        cases.push(parse_func_case(tokens));
-                    },
-                    _ => break
+            },
+            Token::SelfTok => {
+                types.push(Type::SelfT);
+                match tokens.pop().unwrap() {
+                    Token::Comma => {},
+                    Token::CloseParen => break,
+                    x => panic!("unexpected {:?}", x)
                 }
-            }
-            return FunctionDefinition{name, arg_types: types, ret_type: Type::Named(ret), cases}
+            },
+            Token::CloseParen => break,
+            x => panic!("unexpected {:?}", x)
         }
-        _ => panic!("")
     }
+    expect_token(tokens, Token::RightArrow);
+
+    let ret_type = match tokens.pop().unwrap() {
+        Token::Identifier(r) => Type::Named(r),
+        Token::SelfTok => Type::SelfT,
+        _ => panic!("expected return type")
+    };
+
+    FunctionDefinition{
+        name,
+        generics,
+        arg_types: types,
+        ret_type,
+        cases: Vec::new()
+    }
+}
+
+pub fn parse_function(tokens: &mut Vec<Token>) -> FunctionDefinition {
+    let mut function_def = parse_function_type(tokens);
+    let mut cases = Vec::new();
+
+    loop {
+        let nc = clone_nested(tokens.last());
+        match nc {
+            Some(Token::Identifier(x)) => {
+                if x != function_def.name {
+                    break
+                }
+                tokens.pop();
+                cases.push(parse_func_case(tokens));
+            },
+            _ => break
+        }
+    }
+    function_def.cases = cases;
+    return function_def
 }
 
 pub fn parse_function_arg(tokens: &mut Vec<Token>) -> (Vec<Type>, Type) {
@@ -547,63 +607,6 @@ pub fn parse_function_arg(tokens: &mut Vec<Token>) -> (Vec<Type>, Type) {
     return (types, Type::Named(ret))
 }
 
-pub fn parse_function_decl(tokens: &mut Vec<Token>) -> FunctionDefinition {
-    let t = tokens.pop().unwrap();
-    match t {
-        Token::Identifier(name) => {
-            expect_tokens(tokens, &[Token::Colon, Token::OpenParen]);
-
-            let (arg_types, ret_type) = parse_function_arg(tokens);
-
-            let mut cases = Vec::new();
-
-            loop {
-                let nc = clone_nested(tokens.last());
-                match nc {
-                    Some(Token::Identifier(x)) => {
-                        if x != name {
-                            break
-                        }
-                        tokens.pop();
-                        cases.push(parse_func_case(tokens));
-                    },
-                    _ => break
-                }
-            }
-            return FunctionDefinition{name, arg_types, ret_type, cases}
-        }
-        _ => panic!("")
-    }
-}
-
-pub fn method_def(tokens: &mut Vec<Token>) -> FunctionDefinition {
-    let t = tokens.pop().unwrap();
-    match t {
-        Token::Identifier(name) => {
-            expect_tokens(tokens, &[Token::Colon, Token::Colon, Token::OpenParen]);
-
-            let nt = tokens.last().unwrap().clone();
-
-            match nt {
-                Token::SelfTok => {
-                    tokens.pop();
-
-                    let (mut arg_types, ret_type) = parse_function_arg(tokens);
-                    arg_types.insert(0, Type::SelfT);
-                    let cases = parse_function_body(tokens, &name);
-                    return FunctionDefinition{name, arg_types, ret_type, cases}
-                },
-                _ => {
-                    let (arg_types, ret_type) = parse_function_arg(tokens);
-                    let cases = parse_function_body(tokens, &name);
-                    return FunctionDefinition{name, arg_types, ret_type, cases}
-                }
-            }
-        }
-        _ => panic!("")
-    }
-}
-
 pub fn parse_function_body(tokens: &mut Vec<Token>, name: &String) -> Vec<FuncCase> {
     let mut cases = Vec::new();
 
@@ -627,15 +630,34 @@ pub fn parse_function_body(tokens: &mut Vec<Token>, name: &String) -> Vec<FuncCa
     }
 }
 
+pub fn parse_trait(tokens: &mut Vec<Token>) -> Declaration {
+    match tokens.pop().unwrap() {
+        Token::Trait => {
+            let name = expect_identifier(tokens);
+            expect_token(tokens, Token::OpenCurly);
+            let mut funcs = Vec::new();
+            loop {
+                match tokens.last().unwrap().clone() {
+                    Token::Identifier(_) => {
+                        funcs.push(parse_function_type(tokens));
+                        expect_token(tokens, Token::SemiColon);
+                    },
+                    Token::CloseCurly => {
+                        tokens.pop();
+                        return Declaration::Trait(name, funcs)
+                    },
+                    x => panic!("{:?}", x)
+                }
+            }
+        },
+        x => panic!("{:?}", x)
+    }
+}
+
 pub fn parse_struct(tokens: &mut Vec<Token>) -> Declaration {
-    let t = tokens.pop().unwrap();
-    match t {
+    match tokens.pop().unwrap() {
         Token::Struct => {
-            let name_token = tokens.pop().unwrap();
-            let name = match name_token {
-                Token::Identifier(x) => x,
-                _ => panic!("parsing struct and expected structs name")
-            };
+            let name = expect_identifier(tokens);
             expect_token(tokens, Token::OpenCurly);
             let mut fields = Vec::new();
             let mut funcs = Vec::new();
@@ -651,7 +673,7 @@ pub fn parse_struct(tokens: &mut Vec<Token>) -> Declaration {
                                 fields.push(parse_field_def(tokens));
                             },
                             Token::Colon => {
-                                funcs.push(parse_function_decl(tokens));
+                                funcs.push(parse_function(tokens));
                             }
                             x => panic!("{:?} is not expected", x)
                         }
@@ -661,11 +683,11 @@ pub fn parse_struct(tokens: &mut Vec<Token>) -> Declaration {
                         return Declaration::StructDef(name, fields, funcs)
                     },
 
-                    _ => panic!("")
-                 }
+                    x => panic!("")
+                }
             }
         }
-        _ => panic!("")
+        x => panic!("")
     }
 }
 

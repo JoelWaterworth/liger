@@ -134,15 +134,15 @@ pub enum Statement {
 
 #[derive(Clone, Debug)]
 pub enum Expr {
-    Var(String),
-    BinaryExpr(ast::BinaryOperator, Box<Expr>, Box<Expr>),
-    UnaryExpr(ast::UnaryOperator, Box<Expr>),
-    Lambda(Vec<String>, Box<Expr>),
-    App(Box<Expr>, Vec<Expr>),
-    If(Box<Expr>, Vec<Statement>, Vec<Statement>),
-    Case(Box<Expr>, Vec<(Pattern, Box<Expr>)>),
-    Lit(ast::Lit),
-    MethodCall(Box<Expr>, String, Vec<Expr>),
+    Var(String, Type),
+    BinaryExpr(ast::BinaryOperator, Box<Expr>, Box<Expr>, Type),
+    UnaryExpr(ast::UnaryOperator, Box<Expr>, Type),
+    Lambda(Vec<String>, Box<Expr>, Type),
+    App(Box<Expr>, Vec<Expr>, Type),
+    If(Box<Expr>, Vec<Statement>, Vec<Statement>, Type),
+    Case(Box<Expr>, Vec<(Pattern, Box<Expr>)>, Type),
+    Lit(ast::Lit, Type),
+    MethodCall(Box<Expr>, String, Vec<Expr>, Type),
     StructInit(Type, Vec<(String, Expr)>),
 }
 

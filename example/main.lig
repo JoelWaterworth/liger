@@ -1,20 +1,9 @@
 struct Foo {
-    x mut i64
-
-    plah:(Foo, i64) -> IO
-    plah x y = {
-        print(5);
-    }
+    x i64
 }
 
-struct Bar {
-    x Foo
-}
-
-main:() -> IO
-main = {
-    let mut y = Foo{x: 1};
-    let mut x = y;
-    x.x = 6;
-    print(y.x);
+add:(i64, i64) -> i64
+add a b = {
+    let c = a + b;
+    return c;
 }
