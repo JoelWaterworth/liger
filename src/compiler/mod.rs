@@ -161,6 +161,36 @@ impl Compiler {
                 self.file.write(b"* ");
                 self.file.write(ptr.as_bytes());
             },
+            LLVMNode::GetElementptr { ty, src, dst, offset} => {
+                self.file.write(dst.as_bytes());
+                self.file.write(b" = getelementptr ");
+                self.file.write(ty.as_bytes());
+                self.file.write(b", ");
+                self.file.write(ty.as_bytes());
+                self.file.write(b"* ");
+                self.file.write(src.as_bytes());
+                for o in offset {
+                    self.file.write(b", i32 ");
+                    self.file.write(format!("{}", o).as_bytes());
+                }
+            },
+            LLVMNode::Call {dst, ret_ty, func, args} => {
+                self.file.write(dst.as_bytes());
+                self.file.write(b" = call ");
+                self.file.write(ret_ty.as_bytes());
+                self.file.write(b" ");
+                self.file.write(func.as_bytes());
+                self.file.write(b"(");
+                for (i, (ty, arg)) in args.into_iter().enumerate() {
+                    if i != 0 {
+                        self.file.write(b", ");
+                    }
+                    self.file.write(ty.as_bytes());
+                    self.file.write(b" ");
+                    self.file.write(arg.as_bytes());
+                };
+                self.file.write(b")");
+            },
             x => panic!("{:?}", x)
         };
         self.file.write(b"\n");

@@ -50,6 +50,18 @@ pub enum LLVMNode {
         name: String,
         types: Vec<String>
     },
+    GetElementptr {
+        ty: String,
+        src: String,
+        dst: String,
+        offset: Vec<u8>,
+    },
+    Call {
+        dst: String,
+        ret_ty: String,
+        func: String,
+        args: Vec<(String, String)>,
+    }
 }
 
 impl LLVMNode {

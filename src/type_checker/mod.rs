@@ -372,8 +372,8 @@ impl<'a> TypeChecker<'a> {
     }
 
     pub fn global(&self) -> Globals {
-        let structs:HashSet<Struct> = self.structs.iter().map(|(_, &(ref s, _))| {
-            s.clone()
+        let structs:HashMap<String, Struct> = self.structs.iter().map(|(name, &(ref s, _))| {
+            ((*name).clone(), s.clone())
         }).collect();
         let functions:HashSet<Function> = self.typed_functions.iter().map(|(_, ref s)| {
             (*s).clone()

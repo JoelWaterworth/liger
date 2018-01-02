@@ -5,7 +5,7 @@ use std::hash::{Hasher, Hash};
 #[derive(Clone, Debug)]
 pub struct Globals {
     pub functions: HashSet<Function>,
-    pub structs: HashSet<Struct>
+    pub structs: HashMap<String, Struct>
 }
 
 #[derive(Clone, Debug)]
@@ -16,6 +16,17 @@ pub enum Type {
     Unit,
     Bool,
     Cell(Box<Type>)
+}
+
+impl<'a> From<&'a Type> for String {
+    fn from(ty: &Type) -> Self {
+        match ty {
+            &Type::Int => String::from("i64"),
+            &Type::Unit => String::from("void"),
+            &Type::Struct(ref n) => format!("%{}", n),
+            x => panic!("{:?}", x),
+        }
+    }
 }
 
 fn extract_from_cell(ty: &Type) -> Type {

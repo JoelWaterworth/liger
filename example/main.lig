@@ -1,9 +1,9 @@
 struct Foo {
     x i64
+    y i64
 }
 
-add:(i64, i64) -> i64
+add:(i64, i64) -> Foo
 add a b = {
-    let c = a + b;
-    return c;
+    return Foo{x: a, y: b};
 }

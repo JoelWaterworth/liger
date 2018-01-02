@@ -1,4 +1,5 @@
 use super::llvm_node::LLVMNode;
+use std::collections::HashSet;
 use type_checker::typed_ast::*;
 use parsing::ast::BinaryOperator;
 use std::collections::HashMap;
@@ -11,11 +12,39 @@ struct FunctionWriter<'a> {
 }
 
 impl<'a> FunctionWriter<'a> {
+    fn generate_struct_constructor(&mut self, stru: &Struct) -> LLVMNode {
+        let name = stru.name.clone();
+        let mut return_type = stru.name.clone();
+        return_type.insert(0, '%');
+        let mut args = Vec::new();
+        for val in stru.args.values() {
+            args.push(self.code_generation.generate_type(val))
+        };
+        let mut basic_block = self.new_basic_block();
+
+        let ret = self.alloca(&mut basic_block, return_type.clone());
+        for (i, ty) in stru.args.values().enumerate() {
+            let ptr = self.getelementptr(&mut basic_block, return_type.clone(), ret.clone(), vec![0, i as u8]);
+            self.store(&mut basic_block, self.code_generation.generate_type(ty), ptr, format!("%{}", i as u8));
+        };
+
+        let var = self.load(&mut basic_block, return_type.clone(), ret.clone());
+        self.ret(&mut basic_block, return_type.clone(), var);
+
+        LLVMNode::Define {
+            name,
+            return_type,
+            args,
+            basic_blocks: vec![basic_block],
+        }
+    }
+
     fn new_basic_block(&mut self) -> LLVMNode {
         let label = format!("block.{}", self.block_number);
         self.block_number += 1;
         LLVMNode::BasicBlock {label, instructions: Vec::new()}
     }
+
     fn new_variable(&mut self) -> String {
         let variable = format!("%var.{}", self.variable_number);
         self.variable_number += 1;
@@ -28,17 +57,20 @@ impl<'a> FunctionWriter<'a> {
         }
     }
 
+    fn ret(&self, root: &mut LLVMNode, ty: String, val: String) {
+        root.push_to_basic_block(
+            LLVMNode::Ret {
+                ty,
+                val,
+            }
+        );
+    }
+
     fn generate_statement(&mut self, root: &mut LLVMNode, statement: Statement) {
         match statement {
-            Statement::Return {ty, expr} => {
-                let gty = self.code_generation.generate_type(&ty);
+            Statement::Return {ref ty, ref expr} => {
                 let val = self.generate_expression(root, expr.as_ref());
-                root.push_to_basic_block(
-                    LLVMNode::Ret {
-                        ty: gty,
-                        val,
-                    }
-                );
+                self.ret(root, String::from(ty), val)
             },
             Statement::Let {ty, name, expr} => {
                 let val = self.generate_expression(root, expr.as_ref());
@@ -63,19 +95,23 @@ impl<'a> FunctionWriter<'a> {
         }
     }
 
+    fn load(&mut self, root: &mut LLVMNode, ty: String, ptr: String) -> String {
+        let dst = self.new_variable();
+        root.push_to_basic_block(
+            LLVMNode::Load {
+                ty,
+                dst: dst.clone(),
+                ptr,
+            }
+        );
+        dst
+    }
+
     pub fn generate_expression(&mut self, root: &mut LLVMNode , expr: &Expr) -> String {
         match expr {
             &Expr::Var(ref name, _) => return {
                 let (ptr, ty) = self.vars.get(name).unwrap().clone();
-                let dst = self.new_variable();
-                root.push_to_basic_block(
-                    LLVMNode::Load {
-                        ty,
-                        dst: dst.clone(),
-                        ptr,
-                    }
-                );
-                dst
+                self.load(root, ty, ptr)
             },
             &Expr::BinaryExpr(ref op, ref l, ref r, ref ty) => {
                 let lir = self.generate_expression(root, l.as_ref());
@@ -92,8 +128,35 @@ impl<'a> FunctionWriter<'a> {
                 );
                 return dst
             },
+            &Expr::StructInit(ref ty, ref args) => {
+                let mut struct_name = String::from(ty);
+                struct_name.remove(0);
+                let stru = self.code_generation.structs.get(&struct_name).unwrap();
+                let mut func = struct_name;
+                func.insert(0, '@');
+                let mut fields = Vec::new();
+                for &(ref field, ref arg) in args {
+                    let a = self.generate_expression(root, arg);
+                    let t = stru.args.get(field).unwrap();
+                    fields.push(( String::from(t),a));
+                };
+                self.call(root, String::from(ty), func, fields)
+            },
             x => panic!("")
         }
+    }
+
+    fn call(&mut self, basic_block: &mut LLVMNode, ret_ty: String, func: String, args: Vec<(String, String)>) -> String {
+        let dst = self.new_variable();
+        basic_block.push_to_basic_block(
+            LLVMNode::Call {
+                dst: dst.clone(),
+                ret_ty,
+                func,
+                args,
+            }
+        );
+        dst
     }
 
     fn unreachable(&self, basic_block: &mut LLVMNode) {
@@ -138,6 +201,19 @@ impl<'a> FunctionWriter<'a> {
 
     }
 
+    fn getelementptr(&mut self, root: &mut LLVMNode, ty: String, src: String, offset: Vec<u8>) -> String {
+        let dst = self.new_variable();
+        root.push_to_basic_block(
+            LLVMNode::GetElementptr {
+                ty,
+                src,
+                dst: dst.clone(),
+                offset,
+            }
+        );
+        dst
+    }
+
     fn branch(&mut self, root: &mut LLVMNode, branch: String) -> String {
         let dst = self.new_variable();
         root.push_to_basic_block(
@@ -179,7 +255,7 @@ impl<'a> FunctionWriter<'a> {
     pub fn generate_pattern(&mut self, root: &mut LLVMNode, pattern: Pattern, ptr: String) -> String {
         match pattern {
             Pattern::Binding { name, ty} => {
-                let var = self.alloca(root, &ty);
+                let var = self.alloca(root, String::from(&ty));
                 let llvm_type = self.code_generation.generate_type(&ty);
                 self.store(root,llvm_type.clone(), var.clone(), ptr);
 
@@ -201,12 +277,12 @@ impl<'a> FunctionWriter<'a> {
         );
     }
 
-    pub fn alloca(&mut self, root: &mut LLVMNode, ty: &Type) -> String {
+    pub fn alloca(&mut self, root: &mut LLVMNode, ty: String) -> String {
         let var = self.new_variable();
         root.push_to_basic_block(
             LLVMNode::Alloca {
                 ptr: var.clone(),
-                ty: self.code_generation.generate_type(ty),
+                ty,
             }
         );
         var
@@ -245,14 +321,15 @@ impl<'a> FunctionWriter<'a> {
 }
 
 pub struct CodeGeneration {
+    structs: HashMap<String, Struct>,
 }
 
 impl CodeGeneration {
     pub fn new(globals: Globals) -> Vec<LLVMNode> {
         let mut llvm_nodes = Vec::new();
-        let mut code_generation = CodeGeneration{};
+        let mut code_generation = CodeGeneration{structs: globals.structs.clone()};
         let mut function_writer = FunctionWriter::init(&code_generation);
-        for stru in globals.structs {
+        for (_, stru) in globals.structs {
             llvm_nodes.append(&mut code_generation.generate_struct(stru));
         }
         for func in globals.functions {
@@ -268,6 +345,7 @@ impl CodeGeneration {
         match ty {
             &Type::Int => String::from("i64"),
             &Type::Unit => String::from("void"),
+            &Type::Struct(ref n) => format!("%{}", n),
             x => panic!("{:?}", x),
         }
     }
@@ -277,13 +355,17 @@ impl CodeGeneration {
         for val in stru.args.values() {
             types.push(self.generate_type(val))
         };
-        let mut name = stru.name.clone();
-        name.insert(0, '%');
+        let mut struct_name = stru.name.clone();
+        struct_name.insert(0, '%');
+
+        let mut function_writer = FunctionWriter::init(self);
+        let constructor = function_writer.generate_struct_constructor(&stru);
         vec![
             LLVMNode::Type {
-                name,
+                name: struct_name,
                 types
-            }
+            },
+            constructor
         ]
     }
 }
