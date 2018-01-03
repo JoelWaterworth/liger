@@ -1,6 +1,5 @@
 use type_checker::typed_ast::*;
 use parsing::ast::BinaryOperator;
-use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
 

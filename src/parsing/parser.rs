@@ -683,11 +683,11 @@ pub fn parse_struct(tokens: &mut Vec<Token>) -> Declaration {
                         return Declaration::StructDef(name, fields, funcs)
                     },
 
-                    x => panic!("")
+                    x => panic!("{:?}", x)
                 }
             }
         }
-        x => panic!("")
+        x => panic!("{:?}", x)
     }
 }
 

@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::ops::Deref;
-use std::ops::DerefMut;
 
 type RData = Rc<RefCell<Data>>;
 
@@ -31,7 +30,7 @@ pub fn interpret_source_file(tast: Globals) {
     let mut globals:HashMap<String, RData> = HashMap::new();
     let mut types:HashMap<String,HashMap<String,RData>> = HashMap::new();
 
-    for s in tast.structs.into_iter() {
+    for (_, s) in tast.structs.into_iter() {
         let args_data: HashMap<String,RData> =  s.args.iter().map(|(name, _)| {
             (name.clone(), rdata(Data::Unit))
         }).collect();
@@ -117,7 +116,7 @@ impl Executor {
 
     fn eval(&self, env: &Environment, expr: &Expr) -> RData {
         match expr {
-            &Expr::BinaryExpr(ref op, ref left, ref right) => {
+            &Expr::BinaryExpr(ref op, ref left, ref right, _) => {
                 let rl = self.eval(env, left);
                 let rr = self.eval(env, right);
                 let rrl = rl.borrow();
@@ -146,7 +145,7 @@ impl Executor {
                     _ => panic!("not implemented {:?}", op)
                 }
             }
-            &Expr::Var(ref name) => {
+            &Expr::Var(ref name, _) => {
                 match env.vars.get(name) {
                     Some(x) => x.clone(),
                     None => {
@@ -159,8 +158,8 @@ impl Executor {
                     }
                 }
             }
-            &Expr::Lit(Lit::Integral(n)) => rdata(Data::Int(n)),
-            &Expr::App(ref func, ref args) => {
+            &Expr::Lit(Lit::Integral(n), _) => rdata(Data::Int(n)),
+            &Expr::App(ref func, ref args, _) => {
                 let func_data = self.eval(env, func);
                 let args_data = args.iter().map(|x|{
                     self.eval(env, x)
@@ -179,7 +178,7 @@ impl Executor {
                     _ => panic!("")
                 }
             },
-            &Expr::MethodCall(ref con, ref field, ref args) => {
+            &Expr::MethodCall(ref con, ref field, ref args, _) => {
                 let var = self.eval(env, con);
                 let args_data = args.iter().map(|x|{
                     self.eval(env, x)
