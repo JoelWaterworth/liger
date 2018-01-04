@@ -92,6 +92,7 @@ impl LLVMNode {
         }
     }
 
+    #[allow(dead_code)]
     pub fn append_to_basic_block(&mut self, mut node: Vec<LLVMNode>) {
         match self {
             &mut LLVMNode::BasicBlock {label: _, ref mut instructions} => {

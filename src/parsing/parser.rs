@@ -18,6 +18,7 @@ pub fn parse_source_file(tokens: &mut Vec<Token>) -> SourceFile {
     SourceFile {decls, imports}
 }
 
+#[allow(unused_variables)]
 pub fn parse_import(tokens: &mut Vec<Token>) -> String {
     panic!("")
 }
@@ -285,6 +286,7 @@ fn expect_token(tokens: &mut Vec<Token>, token: Token) {
     }
 }
 
+#[allow(dead_code)]
 fn expect_tokens(tokens: &mut Vec<Token>, expected_tokens: &[Token]) {
     for token in expected_tokens.iter() {
         expect_token(tokens, token.clone());
@@ -414,7 +416,6 @@ fn parse_method_call(tokens: &mut Vec<Token>) -> Option<Statement> {
                     _ => return None
                 }
             };
-            method
         },
         _ => return None
     }
@@ -566,68 +567,6 @@ pub fn parse_function(tokens: &mut Vec<Token>) -> FunctionDefinition {
     }
     function_def.cases = cases;
     return function_def
-}
-
-pub fn parse_function_arg(tokens: &mut Vec<Token>) -> (Vec<Type>, Type) {
-    let mut types = Vec::new();
-
-    loop {
-        let nt = tokens.pop().unwrap();
-        match nt {
-            Token::Identifier(ty) => {
-                types.push(Type::Named(ty));
-                let nnt = tokens.pop().unwrap();
-                match nnt {
-                    Token::Comma => {},
-                    Token::CloseParen => break,
-                    _ => panic!("unexpected {:?}", nnt)
-                }
-            },
-            Token::SelfTok => {
-                types.push(Type::SelfT);
-                let nnt = tokens.pop().unwrap();
-                match nnt {
-                    Token::Comma => {},
-                    Token::CloseParen => break,
-                    _ => panic!("unexpected {:?}", nnt)
-                }
-            },
-            Token::CloseParen => break,
-            _ => panic!("unexpected {:?}", nt)
-        }
-    }
-    expect_token(tokens, Token::RightArrow);
-
-    let nt = tokens.pop().unwrap();
-
-    let ret = match nt {
-        Token::Identifier(r) => r,
-        _ => panic!("expected return type")
-    };
-    return (types, Type::Named(ret))
-}
-
-pub fn parse_function_body(tokens: &mut Vec<Token>, name: &String) -> Vec<FuncCase> {
-    let mut cases = Vec::new();
-
-    loop {
-        let nc = clone_nested(tokens.last());
-        match nc {
-            Some(Token::Identifier(ref x)) => {
-                if x != name {
-                    break
-                }
-                tokens.pop();
-                cases.push(parse_func_case(tokens));
-            },
-            _ => break
-        }
-    }
-    if cases.len() > 0 {
-        return cases
-    } else {
-        panic!("no function cases")
-    }
 }
 
 pub fn parse_trait(tokens: &mut Vec<Token>) -> Declaration {

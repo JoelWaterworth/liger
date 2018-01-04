@@ -24,7 +24,7 @@ use compiler::compile;
 
 fn main() {
     let mut args = env::args();
-    let prog_name = args.next();
+    args.next();
     let command = args.next();
     let display = args.next();
     let x = if display == Some(String::from("Debug")) {
@@ -42,10 +42,6 @@ fn main() {
     if x {
         println!("\n {:?}", ty);
     }
-
-    let mut args = env::args();
-    let prog_name = args.next();
-    let command = args.next();
 
     if command == Some(String::from("compile")) {
         println!("compiling source code");

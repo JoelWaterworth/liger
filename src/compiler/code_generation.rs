@@ -1,5 +1,4 @@
 use super::llvm_node::LLVMNode;
-use std::collections::HashSet;
 use type_checker::typed_ast::*;
 use parsing::ast::BinaryOperator;
 use std::collections::HashMap;
@@ -142,7 +141,7 @@ impl<'a> FunctionWriter<'a> {
                 };
                 self.call(root, String::from(ty), func, fields)
             },
-            x => panic!("")
+            x => panic!("{:?}", x)
         }
     }
 
@@ -327,7 +326,7 @@ pub struct CodeGeneration {
 impl CodeGeneration {
     pub fn new(globals: Globals) -> Vec<LLVMNode> {
         let mut llvm_nodes = Vec::new();
-        let mut code_generation = CodeGeneration{structs: globals.structs.clone()};
+        let code_generation = CodeGeneration{structs: globals.structs.clone()};
         let mut function_writer = FunctionWriter::init(&code_generation);
         for (_, stru) in globals.structs {
             llvm_nodes.append(&mut code_generation.generate_struct(stru));

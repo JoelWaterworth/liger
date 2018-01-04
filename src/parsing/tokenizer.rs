@@ -2,6 +2,7 @@ use nom::{digit, alphanumeric};
 use std::str;
 use std::str::FromStr;
 
+#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum Token {
     Add,

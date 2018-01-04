@@ -29,12 +29,13 @@ impl<'a> From<&'a Type> for String {
     }
 }
 
+#[allow(dead_code)]
 fn extract_from_cell(ty: &Type) -> Type {
     match ty {
         &Type::Cell(ref x) => {
             let t = (**x).clone();
             match t {
-                Type::Cell(ref y) => panic!(""),
+                Type::Cell(_) => panic!(""),
                 _ => {}
             }
             t

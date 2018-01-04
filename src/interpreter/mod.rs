@@ -31,10 +31,6 @@ pub fn interpret_source_file(tast: Globals) {
     let mut types:HashMap<String,HashMap<String,RData>> = HashMap::new();
 
     for (_, s) in tast.structs.into_iter() {
-        let args_data: HashMap<String,RData> =  s.args.iter().map(|(name, _)| {
-            (name.clone(), rdata(Data::Unit))
-        }).collect();
-
         let functions:HashMap<String,RData> = s.methods.into_iter().map(|(name, f)| {
             (name, rdata(Data::Closure(f)) )
         }).collect();
@@ -189,6 +185,7 @@ impl Executor {
         }
     }
 
+    #[allow(unreachable_patterns)]
     fn exec(&self, env: &mut Environment, statement: &Statement) -> Option<RData> {
         match statement {
             &Statement::FunctionCall(ref func, ref args) => {
@@ -198,7 +195,7 @@ impl Executor {
                 }).collect();
                 self.apply(&func_data, args_data);
             }
-            &Statement::Return{ref ty, ref expr} => {
+            &Statement::Return{ty: _, ref expr} => {
                 let x = self.eval(env, expr);
                 return Some(x)
             }
@@ -225,7 +222,7 @@ impl Executor {
                     _ => panic!("should be bool")
                 }
             }
-            &Statement::Let{ref ty, ref name, ref expr} => {
+            &Statement::Let{ty: _, ref name, ref expr} => {
                 let x = self.eval(env, expr);
                 env.vars.insert(name.clone(), x);
             }
@@ -246,6 +243,7 @@ impl Executor {
         return None
     }
 
+    #[allow(unreachable_patterns)]
     fn eval_l_expr<'a>(&self, l_expr: &LExpr, env: &'a Environment) -> RData {
         match l_expr {
             &LExpr::Var(ref name) => env.vars.get(name).unwrap().clone(),
@@ -254,7 +252,7 @@ impl Executor {
                 let mut rl = l.borrow();
                 let mut rrl = rl.deref();
                 match rrl {
-                    &Data::Class(ref name, ref fields) => {
+                    &Data::Class(_, ref fields) => {
                         fields.get(field).unwrap().clone()
                     }
                     x => panic!("{:?}", x)
@@ -279,11 +277,11 @@ impl Executor {
 
     fn func_match_arg_check(&self, parameter: &Pattern, arg: &RData, env: &mut Environment) -> bool {
         match parameter {
-            &Pattern::Binding{ref name, ref ty } => {
+            &Pattern::Binding{ref name, ty: _ } => {
                 env.vars.insert(name.clone(), arg.clone());
                 return true
             },
-            &Pattern::Constant {value: ConstVal{ref ty, val: Lit::Integral(ref n)}} => {
+            &Pattern::Constant {value: ConstVal{ty: _, val: Lit::Integral(ref n)}} => {
                 match arg.borrow().deref() {
                     &Data::Int(ref m) => if n == m {
                         return true

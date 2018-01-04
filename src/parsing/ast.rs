@@ -26,6 +26,7 @@ pub enum UnaryOperator {
     Not,
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub enum Match {
     WildCard(String),
@@ -33,6 +34,7 @@ pub enum Match {
     Lit(Lit),
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub enum Expr {
     Var(String),

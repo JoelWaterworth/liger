@@ -178,7 +178,7 @@ impl<'a> TypeChecker<'a> {
                         (Expr::StructInit(Type::Struct(x.clone()), fields), Type::Struct(x.clone()))
                     },
                     &ast::Type::SelfT => panic!("SelfT unimplemented"),
-                    &ast::Type::Cell(ref ty) => panic!("Cell unimplemented"),
+                    &ast::Type::Cell(_) => panic!("Cell unimplemented"),
                 }
             },
             &ast::Expr::Lit(Lit::Integral(n)) => (Expr::Lit(Lit::Integral(n.clone()), Type::Int), Type::Int),
@@ -230,7 +230,7 @@ impl<'a> TypeChecker<'a> {
             None => {
                 match s.1.get(field) {
                     Some(&(ref arg_ty, ref ret_ty)) => {
-                        arg_ty.iter().zip(args.iter()).for_each(|(x,&(ref expr, ref ty))|{
+                        arg_ty.iter().zip(args.iter()).for_each(|(x,&(ref _expr, ref ty))|{
                             if *x != *ty {
                                 panic!("wrong type supplied on field {}", field)
                             }
@@ -302,11 +302,11 @@ impl<'a> TypeChecker<'a> {
                     }
                 },
                 &ast::Statement::FunctionCall(ref expr, ref args) => {
-                    let (t, a, r) = self.function_call(expr,args,env);
+                    let (t, a, _) = self.function_call(expr,args,env);
                     Statement::FunctionCall(Box::new(t), a)
                 },
                 &ast::Statement::MethodCall(ref expr, ref field, ref args) => {
-                    let (eval_target, arg_expr, ret_type) = self.eval_method_call(expr, field, &args, env);
+                    let (eval_target, arg_expr, _) = self.eval_method_call(expr, field, &args, env);
                     Statement::MethodCall(Box::new(eval_target.0), field.clone(), arg_expr)
                 },
                 x => unimplemented!("{:?}", x)
@@ -314,13 +314,14 @@ impl<'a> TypeChecker<'a> {
         }).collect()
     }
 
+    #[allow(unreachable_patterns)]
     pub fn eval_l_expr(&self, l_expr: &ast::LExpr, env: &Environment) -> (LExpr, Type) {
         match l_expr {
             &ast::LExpr::Var(ref name) => {
                 let ty = env.get(name).unwrap().clone();
                 return (LExpr::Var(name.clone()), ty)
             },
-            &ast::LExpr::MethodCall(ref l_expr, ref field, ref arg) => {
+            &ast::LExpr::MethodCall(ref l_expr, ref field, ref _arg) => {
                 let (t_l_expr, ty) = self.eval_l_expr(l_expr, env);
                 match ty {
                     Type::Cell(box Type::Struct(ref name)) => {
@@ -351,7 +352,7 @@ impl<'a> TypeChecker<'a> {
                     },
                     None => {
                         match self.typed_functions.get(name) {
-                            Some(&Function{ref name, ref args_ty, ref ret_ty, ref cases}) => {
+                            Some(&Function{ref name, ref args_ty, ref ret_ty, cases: _}) => {
                                 let mut typed_args = Vec::new();
                                 for (arg, ty) in args.iter().zip(args_ty.iter()) {
                                     let eval_arg = self.eval_expr(arg, env);
