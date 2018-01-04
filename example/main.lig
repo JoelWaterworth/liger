@@ -7,3 +7,8 @@ add:(i64, i64) -> Foo
 add a b = {
     return Foo{x: a, y: b};
 }
+
+main:() -> IO
+main = {
+    let a = add(4,5);
+}

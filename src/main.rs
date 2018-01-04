@@ -10,6 +10,7 @@ extern crate libc;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
+use std::env;
 
 mod parsing;
 mod interpreter;
@@ -22,15 +23,35 @@ use interpreter::interpret_source_file;
 use compiler::compile;
 
 fn main() {
+    let mut args = env::args();
+    let prog_name = args.next();
+    let command = args.next();
+    let display = args.next();
+    let x = if display == Some(String::from("Debug")) {
+        true
+    } else {
+        false
+    };
     let path = Path::new("example/main.lig");
     let mut file = File::open(&path).unwrap();
     let mut s = String::new();
     file.read_to_string(&mut s).ok().unwrap();
 
-    let sf = parse(s.as_ref());
+    let sf = parse(s.as_ref(), x , x);
     let ty = type_check_ast(&sf);
-    println!("\n {:?}", ty);
-    compile(ty);
+    if x {
+        println!("\n {:?}", ty);
+    }
 
-    //interpret_source_file(ty);
+    let mut args = env::args();
+    let prog_name = args.next();
+    let command = args.next();
+
+    if command == Some(String::from("compile")) {
+        println!("compiling source code");
+        compile(ty);
+    } else if command == Some(String::from("interpret")) {
+        println!("interpreting source code");
+        interpret_source_file(ty);
+    }
 }
