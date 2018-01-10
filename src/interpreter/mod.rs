@@ -174,7 +174,7 @@ impl Executor {
                     _ => panic!("")
                 }
             },
-            &Expr::MethodCall(ref con, ref field, ref args, _) => {
+            &Expr::MethodCall(ref con, _, ref field, ref args, _) => {
                 let var = self.eval(env, con);
                 let args_data = args.iter().map(|x|{
                     self.eval(env, x)
@@ -188,7 +188,7 @@ impl Executor {
     #[allow(unreachable_patterns)]
     fn exec(&self, env: &mut Environment, statement: &Statement) -> Option<RData> {
         match statement {
-            &Statement::FunctionCall(ref func, ref args) => {
+            &Statement::FunctionCall(ref func, ref args, _) => {
                 let func_data = self.eval(env, func);
                 let args_data = args.iter().map(|x|{
                    self.eval(env, x)

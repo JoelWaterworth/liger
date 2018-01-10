@@ -8,16 +8,30 @@ use compiler::code_generation::CodeGeneration;
 
 mod code_generation;
 mod llvm_node;
-
+use std::process::Command;
 use compiler::llvm_node::LLVMNode;
 
 pub fn compile(globals: Globals) {
     let code = CodeGeneration::new(globals);
-    let mut compiler = Compiler::new();
+    let mut compiler = Compiler::new("bin\\foo.ll");
     match compiler.write_top_levels(code) {
         Ok(()) => {},
         Err(x) => println!("{}", x)
     };
+
+    Command::new("mkdir")
+        .arg("bin")
+        .output();
+
+    Command::new("clang")
+        .args(&["util.o", "bin\\foo.ll", "-o", "bin/foo.exe"])
+        .output()
+        .expect("failed to execute process");
+
+    print!("\n program now running \n\n");
+    Command::new("bin\\foo.exe")
+        .spawn()
+        .expect("A subdirectory or file bin already exists.");
 }
 
 struct Compiler {
@@ -26,9 +40,9 @@ struct Compiler {
 }
 
 impl Compiler {
-    fn new() -> Self {
+    fn new(path: &str) -> Self {
         Compiler {
-            file: File::create("foo.ll").unwrap(),
+            file: File::create(path).unwrap(),
             indent: 0,
         }
     }
@@ -71,6 +85,20 @@ impl Compiler {
                     self.file.write(ty.as_bytes())?;
                 }
                 self.file.write(b"}")?;
+            },
+            LLVMNode::Declare {name, return_type, args} => {
+                self.file.write(b"declare ")?;
+                self.file.write(return_type.as_bytes())?;
+                self.file.write(b" @")?;
+                self.file.write(name.as_bytes())?;
+                self.file.write(b"(")?;
+                for (i, arg) in args.iter().enumerate() {
+                    if i > 0 {
+                        self.file.write(b", ")?;
+                    }
+                    self.file.write(arg.as_bytes())?;
+                }
+                self.file.write(b")\n")?;
             }
             x => panic!("{:?}", x)
         }
@@ -85,6 +113,7 @@ impl Compiler {
         for instruction in node.get_instruction() {
             self.write_instruction(instruction)?;
         }
+        self.write_instruction(node.get_terminator())?;
         Ok(())
     }
 
@@ -180,8 +209,12 @@ impl Compiler {
                 }
             },
             LLVMNode::Call {dst, ret_ty, func, args} => {
-                self.file.write(dst.as_bytes())?;
-                self.file.write(b" = call ")?;
+                if ret_ty == String::from("void") {
+                    self.file.write(b"tail call ")?;
+                } else {
+                    self.file.write(dst.as_bytes())?;
+                    self.file.write(b" = call ")?;
+                }
                 self.file.write(ret_ty.as_bytes())?;
                 self.file.write(b" ")?;
                 self.file.write(func.as_bytes())?;
@@ -195,6 +228,15 @@ impl Compiler {
                     self.file.write(arg.as_bytes())?;
                 };
                 self.file.write(b")")?;
+            },
+            LLVMNode::ExtractValue { ty, src, dst, offset} => {
+                self.file.write(dst.as_bytes())?;
+                self.file.write(b" = extractvalue ")?;
+                self.file.write(ty.as_bytes())?;
+                self.file.write(b" ")?;
+                self.file.write(src.as_bytes())?;
+                self.file.write(b", ")?;
+                self.file.write(format!("{}", offset).as_bytes())?;
             },
             x => panic!("{:?}", x)
         };

@@ -47,6 +47,7 @@ pub enum Expr {
     Lit(Lit),
     MethodCall(Box<Expr>, String, Vec<Expr>),
     StructInit(Type, Vec<(String, Expr)>),
+    EnumInit(Type, String, Vec<Expr>),
 }
 
 #[derive(Clone, Debug)]
@@ -113,7 +114,15 @@ pub enum Declaration {
     FunctionDef(FunctionDefinition),
     StructDef(String, Vec<FieldDef>, Vec<FunctionDefinition>),
     Trait(String, Vec<FunctionDefinition>),
-    //enum
+    Enum(String, Vec<EnumField>),
+    Link(String),
+    Extern(FunctionDefinition)
+}
+
+#[derive(Clone, Debug)]
+pub struct EnumField {
+    pub name: String,
+    pub body: Vec<Type>
 }
 
 #[derive(Clone, Debug)]

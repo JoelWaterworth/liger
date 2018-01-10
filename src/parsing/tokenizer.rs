@@ -1,6 +1,6 @@
-use nom::{digit, alphanumeric};
 use std::str;
 use std::str::FromStr;
+use std::str::Chars;
 
 #[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq)]
@@ -46,11 +46,217 @@ pub enum Token {
     Enum,
     Mut,
     SelfTok,
+    Link,
+    Extern,
+    Quote,
+}
+pub fn lexer1(slice: &mut Chars) -> Vec<Token> {
+    let mut tokens = Vec::new();
+    loop {
+        skip_white_space(slice);
+        let mut temp = slice.clone();
+        match temp.next() {
+            Some(c) => {
+                match c {
+                    '(' => {
+                        slice.next();
+                        tokens.push(Token::OpenParen);
+                    },
+                    ')' => {
+                        slice.next();
+                        tokens.push(Token::CloseParen)
+                    },
+                    ',' => {
+                        slice.next();
+                        tokens.push(Token::Comma)
+                    },
+                    ';' => {
+                        slice.next();
+                        tokens.push(Token::SemiColon)
+                    },
+                    '=' => {
+                        slice.next();
+                        match temp.next() {
+                            Some('=') => {
+                                slice.next();
+                                tokens.push(Token::IsEqualTo)
+                            },
+                            _ => tokens.push(Token::Equal)
+                        }
+                    },
+                    '{' => {
+                        slice.next();
+                        tokens.push(Token::OpenCurly)
+                    },
+                    '}' => {
+                        slice.next();
+                        tokens.push(Token::CloseCurly)
+                    },
+                    '*' => {
+                        slice.next();
+                        tokens.push(Token::Mul)
+                    },
+                    '/' => {
+                        slice.next();
+                        tokens.push(Token::Div)
+                    },
+                    '+' => {
+                        slice.next();
+                        tokens.push(Token::Add)
+                    },
+                    '-' => {
+                        slice.next();
+                        match temp.next() {
+                            Some('>') => {
+                                slice.next();
+                                tokens.push(Token::RightArrow)
+                            },
+                            _ => {
+                                tokens.push(Token::Sub)
+                            }
+                        }
+                    },
+                    ':' => {
+                        slice.next();
+                        tokens.push(Token::Colon)
+                    },
+                    '!' => {
+                        slice.next();
+                        match temp.next() {
+                            Some('=') => {
+                                slice.next();
+                                tokens.push(Token::IsNotEqualTo)
+                            },
+                            _ => tokens.push(Token::Not)
+                        }
+                    },
+                    '<' => {
+                        slice.next();
+                        match temp.next() {
+                            Some('=') => {
+                                slice.next();
+                                tokens.push(Token::LE)
+                            },
+                            _ => tokens.push(Token::LT)
+                        }
+                    },
+                    '>' => {
+                        slice.next();
+                        match temp.next() {
+                            Some('=') => {
+                                slice.next();
+                                tokens.push(Token::GE)
+                            },
+                            _ => tokens.push(Token::GT)
+                        }
+                    },
+                    '&' => {
+                        slice.next();
+                        tokens.push(Token::BitwiseAnd)
+                    },
+                    '|' => {
+                        slice.next();
+                        tokens.push(Token::BitwiseOr)
+                    },
+                    '^' => {
+                        slice.next();
+                        tokens.push(Token::BitwiseXor)
+                    },
+                    '.' => {
+                        slice.next();
+                        tokens.push(Token::Dot)
+                    },
+                    '"' => {
+                        slice.next();
+                        tokens.push(Token::Quote)
+                    },
+                    '\n' => {
+                        slice.next();
+                    },
+                    '\r' => {
+                        slice.next();
+                    },
+                    ' ' => {
+                        slice.next();
+                    },
+                    _ => {
+                        if c.is_alphabetic() {
+                            tokens.push(Token::Identifier(identifier1(slice)))
+                        } else if c.is_numeric() {
+                            tokens.push(Token::Integer(number1(slice)))
+                        } else {
+                            println!("{}", c);
+                            break
+                        }
+                    },
+                };
+            },
+            None => {
+                println!("end");
+                break
+            }
+        }
+    }
+    return tokens
 }
 
-pub fn lexer(slice: &[u8]) -> Vec<Token> {
-    let mut x = tokenizer(slice).unwrap().1;
+fn skip_white_space(text:&mut Chars) {
+    let mut slice = text.clone();
+    loop {
+        match slice.next() {
+            Some(' ') => {
+                text.next();
+            }
+            Some('\n') => {
+                text.next();
+            }
+            _ => break
+        }
+    }
+}
+
+fn identifier1(text:&mut Chars) -> String {
+    let mut string = String::new();
+    let mut slice = text.clone();
+    loop {
+        match slice.next() {
+            Some(c) => {
+                if c.is_alphanumeric() {
+                    string.push(c);
+                    text.next();
+                } else {
+                    break
+                }
+            }
+            None => break
+        }
+    }
+    string
+}
+
+fn number1(text:&mut Chars) -> u64 {
+    let mut number = 0;
+    let mut slice = text.clone();
+    loop {
+        match slice.next() {
+            Some(c) => {
+                if c.is_numeric() {
+                    number = (number * 10) + c.to_digit(10).unwrap() as u64;
+                    text.next();
+                } else {
+                    break
+                }
+            }
+            None => break
+        }
+    }
+    number
+}
+
+pub fn lexer(slice: String) -> Vec<Token> {
+    let mut x = lexer1(&mut slice.chars());
     find_keywords(&mut x);
+    println!("lexer finished");
     x
 }
 
@@ -68,109 +274,11 @@ fn find_keywords(v: &mut Vec<Token>) {
                     "enum"      => *t = Token::Enum,
                     "Self"      => *t = Token::SelfTok,
                     "mut"       => *t = Token::Mut,
+                    "extern"    => *t = Token::Extern,
+                    "link"      => *t = Token::Link,
                     _ => {}
                 }},
             _ => {}
         };
     }
 }
-
-named!(tokenizer<Vec<Token>>, many0!(
-    alt!(   multi_char_tokens
-        |   char_tokens
-        |   integer
-        |   identifier)
-));
-
-named!(pub word<String>, map_res!(
-    map_res!(
-        ws!(alphanumeric),
-        str::from_utf8
-    ),
-    FromStr::from_str
-));
-
-named!(identifier<Token>, do_parse!(
-    n: word >>
-    (Token::Identifier(n))
-));
-
-named!(multi_char_tokens<Token>, do_parse!(
-    p: ws!(alt!(
-            tag!("->")
-        |   tag!("&&")
-        |   tag!("||")
-        |   tag!("<=")
-        |   tag!(">=")
-        |   tag!("==")
-        |   tag!("!=")
-        )) >>
-
-    (match p {
-        b"->" => Token::RightArrow,
-        b"&&" => Token::And,
-        b"||" => Token::Or,
-        b"<=" => Token::LE,
-        b">=" => Token::GE,
-        b"==" => Token::IsEqualTo,
-        b"!=" => Token::IsNotEqualTo,
-        _ => panic!("multi_char_tokens needs more cases")
-    })
-));
-
-named!(char_tokens<Token>, do_parse!(
-    p: ws!(alt!(
-          tag!("(")
-        | tag!(")")
-        | tag!(";")
-        | tag!(",")
-        | tag!("=")
-        | tag!("{")
-        | tag!("}")
-        | tag!("*")
-        | tag!("/")
-        | tag!("+")
-        | tag!("-")
-        | tag!(":")
-        | tag!("!")
-        | tag!("<")
-        | tag!(">")
-        | tag!("&")
-        | tag!("|")
-        | tag!("^")
-        | tag!(".")
-    )) >>
-    (match p[0] as char {
-        '(' => Token::OpenParen,
-        ')' => Token::CloseParen,
-        ',' => Token::Comma,
-        ';' => Token::SemiColon,
-        '=' => Token::Equal,
-        '{' => Token::OpenCurly,
-        '}' => Token::CloseCurly,
-        '*' => Token::Mul,
-        '/' => Token::Div,
-        '+' => Token::Add,
-        '-' => Token::Sub,
-        ':' => Token::Colon,
-        '!' => Token::Not,
-        '<' => Token::LT,
-        '>' => Token::GT,
-        '&' => Token::BitwiseAnd,
-        '|' => Token::BitwiseOr,
-        '^' => Token::BitwiseXor,
-        '.' => Token::Dot,
-        _ => panic!("char_tokens needs more cases")
-    })
-));
-
-named!(integer<Token>, do_parse!(
-    n: map_res!(
-          map_res!(
-            ws!(digit),
-            str::from_utf8
-          ),
-          FromStr::from_str
-        ) >>
-    (Token::Integer(n))
-));

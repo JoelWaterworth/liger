@@ -37,7 +37,7 @@ fn main() {
     let mut s = String::new();
     file.read_to_string(&mut s).ok().unwrap();
 
-    let sf = parse(s.as_ref(), x , x);
+    let sf = parse(s, x , x);
     let ty = type_check_ast(&sf);
     if x {
         println!("\n {:?}", ty);

@@ -10,69 +10,90 @@ type Environment<'a> = HashMap<&'a String, Type>;
 pub fn type_check_ast<'a>(sf: &'a SourceFile) -> Globals {
     let mut functions = Vec::new();
     let mut shm = HashMap::new();
+    let mut enums = HashMap::new();
+    let mut links = Vec::new();
     for decl in &sf.decls {
         match decl {
             &ast::Declaration::FunctionDef(ref x) => {functions.push(x);},
             &ast::Declaration::StructDef(ref name, ref fields, ref methods) => {shm.insert(name, (fields, methods));},
+            &ast::Declaration::Enum(ref name, ref fields) => {
+                enums.insert(name, fields);
+            },
+            &ast::Declaration::Link(ref n) => links.push(n.clone()),
             x => panic!("{:?}", x)
         };
     };
+    let mut typed_enums = HashMap::new();
+    for (name, fields) in enums.iter() {
+        let mut members = Vec::new();
+        for field in *fields {
+            let mut args = Vec::new();
+            for arg in field.body.iter() {
+                args.push(Type::from_with_maps(&arg, &shm, &enums));
+            }
+            members.push((field.name.clone(), args))
+        }
+        typed_enums.insert(name.clone(), Enum{name: (*name).clone(), members});
+    }
     let mut structs = HashMap::new();
     let struct_iter = shm.iter();
     let mut methods = HashMap::new();
     for (name, &(ref fields, ref funcs)) in struct_iter.clone() {
         let mut f = HashMap::new();
-        for field in fields.iter() {
-            f.insert(field.name.clone(), Type::from_with_map(&field.ty, &shm));
+        for (i, field) in fields.iter().enumerate() {
+            f.insert(field.name.clone(), (Type::from_with_maps(&field.ty, &shm, &enums), i as i32));
         };
         let struct_type = Type::Struct((*name).clone());
         let method_type: FunctionTypes = funcs.iter().map(|func|{
-            create_method_ty(&struct_type, func,&shm)
+            create_method_ty(&struct_type, func,&shm, &enums)
         }).collect();
         structs.insert(*name, (Struct{name: (*name).clone(), args: f, methods: HashMap::new()}, method_type));
         methods.insert((*name).clone(), *funcs);
     };
 
     let function_types:FunctionTypes = functions.iter().map(|func|{
-        create_func_ty(func, &shm)
+        create_func_ty(func, &shm, &enums)
     }).collect();
     let mut typed_functions = HashMap::new();
-    typed_functions.insert(String::from("print"),
-                           Function{
-        name: String::from("print"),
-        args_ty: vec![Type::Int],
-        ret_ty: Box::new(Type::Unit),
-        cases: Body::BuiltInFunc(String::from("print"))
-    });
+//    typed_functions.insert(String::from("print"),
+//                           Function{
+//        name: String::from("print"),
+//        args_ty: vec![Type::Int],
+//        ret_ty: Box::new(Type::Unit),
+//        cases: Body::BuiltInFunc(String::from("print"))
+//    });
 
-    let mut type_checker = TypeChecker{function_types, structs, typed_functions};
+    let mut type_checker = TypeChecker{function_types, structs, typed_functions, enums: typed_enums};
     type_checker.parse_methods(methods);
     type_checker.parse_functions(functions);
-    type_checker.global()
+    type_checker.global(links)
 }
 
 impl Type {
-    pub fn from_with_map<T>(ty: &ast::Type, map: &HashMap<&String, T>) -> Type {
+    pub fn from_with_maps<S,E>(ty: &ast::Type, struct_map: &HashMap<&String, S>, enum_map: &HashMap<&String, E>) -> Type {
         match ty {
             &ast::Type::Named(ref x) => match x.as_str() {
                 "i64" => Type::Int,
                 "IO" => Type::Unit,
                 _ => {
-                    match map.get(x) {
+                    match struct_map.get(x) {
                         Some(_) => Type::Struct(x.clone()),
-                        None => panic!("{:?} is not expected", x)
+                        None => match enum_map.get(x) {
+                            Some(_) => Type::Enum(x.clone()),
+                            None => panic!("{:?} is not expected", x)
+                        }
                     }
                 }
             },
-            &ast::Type::Cell(ref x) => Type::Cell(Box::new(Type::from_with_map(x.as_ref(), map))),
+            &ast::Type::Cell(ref x) => Type::Cell(Box::new(Type::from_with_maps(x.as_ref(), struct_map, enum_map))),
             _ => panic!("{:?}", ty)
         }
     }
 
-    pub fn method_type<T>(ty: &ast::Type, self_type: &Type, map: &HashMap<&String, T>) -> Type {
+    pub fn method_type<S,E>(ty: &ast::Type, self_type: &Type, struct_map: &HashMap<&String, S>, enum_map: &HashMap<&String, E>) -> Type {
         match ty {
             &ast::Type::SelfT => self_type.clone(),
-            _ => Type::from_with_map(ty, map)
+            _ => Type::from_with_maps(ty, struct_map, enum_map)
         }
     }
     pub fn get_nested_cell_type(&self)-> Type {
@@ -86,20 +107,20 @@ impl Type {
 type FunctionTypes<'a> = HashMap<&'a String, FunctionType>;
 type FunctionType = (Vec<Type>, Type);
 
-fn create_func_ty<'a, T>(func: &'a ast::FunctionDefinition, map: &HashMap<&String, T>) -> (&'a String, FunctionType) {
+fn create_func_ty<'a, T, E>(func: &'a ast::FunctionDefinition, map: &HashMap<&String, T>, enum_maps: &HashMap<&String, E>) -> (&'a String, FunctionType) {
     let name = &func.name;
-    let ret = Type::from_with_map( &func.ret_type, map);
+    let ret = Type::from_with_maps( &func.ret_type, map, enum_maps);
     let arg_types:Vec<Type> = func.arg_types.iter().map(|arg| {
-        Type::from_with_map(arg,map)
+        Type::from_with_maps(arg, map, enum_maps)
     }).collect();
     (name, (arg_types, ret))
 }
 
-fn create_method_ty<'a, T>(stru: &Type, func: &'a ast::FunctionDefinition, map: &HashMap<&String, T>) -> (&'a String, FunctionType) {
+fn create_method_ty<'a, T, E>(stru: &Type, func: &'a ast::FunctionDefinition, map: &HashMap<&String, T>, enum_maps: &HashMap<&String, E>) -> (&'a String, FunctionType) {
     let name = &func.name;
-    let ret = Type::method_type( &func.ret_type, stru, map);
+    let ret = Type::method_type( &func.ret_type, stru, map, enum_maps);
     let arg_types:Vec<Type> = func.arg_types.iter().map(|arg| {
-        Type::method_type(arg,stru,map)
+        Type::method_type(arg,stru,map, enum_maps)
     }).collect();
     (name, (arg_types, ret))
 }
@@ -107,6 +128,7 @@ fn create_method_ty<'a, T>(stru: &Type, func: &'a ast::FunctionDefinition, map: 
 struct TypeChecker<'a> {
     function_types: FunctionTypes<'a>,
     structs: HashMap<&'a String, (Struct, FunctionTypes<'a>)>,
+    enums: HashMap<&'a String, Enum>,
     typed_functions: HashMap<String, Function>
 }
 
@@ -136,6 +158,9 @@ impl<'a> TypeChecker<'a> {
     }
 
     fn eval_func_cases<'b>(&self, cases: &'b Vec<ast::FuncCase>, arg_type: &'b Vec<Type>, ret_type: &'a Type) -> Body {
+        if cases.is_empty() {
+            return Body::BuiltInFunc(String::new())
+        }
         Body::Cases(
             cases.iter().map(|case: &'b ast::FuncCase| {
                 let mut env: Environment<'b> = HashMap::new();
@@ -170,7 +195,7 @@ impl<'a> TypeChecker<'a> {
                         for &(ref arg_name, ref arg_expr) in args.into_iter() {
                             let arg_type = s.args.get(arg_name).unwrap();
                             let (typed_expr, expr_type) = self.eval_expr(arg_expr, env );
-                            if arg_type != &expr_type {
+                            if arg_type.0 != expr_type {
                                 panic!("{:?} should be {:?}, not {:?}", arg_name, arg_type, expr_type)
                             };
                             fields.push((arg_name.clone(), typed_expr));
@@ -187,9 +212,9 @@ impl<'a> TypeChecker<'a> {
                 (Expr::Var(n.clone(), ty.clone()), ty)
             },
             &ast::Expr::MethodCall(ref target, ref field, ref args) => {
-                let (eval_target, arg_expr, ret_type) = self.eval_method_call(&target, field, &args, env);
+                let ((eval_target, ty), arg_expr, ret_type) = self.eval_method_call(&target, field, &args, env);
 
-                (Expr::MethodCall(Box::new(eval_target.0), field.clone(), arg_expr, ret_type.clone()), ret_type)
+                (Expr::MethodCall(Box::new(eval_target), ty, field.clone(), arg_expr, ret_type.clone()), ret_type)
             },
             &ast::Expr::App(ref target, ref args) => {
                 let (t, a, r) = self.function_call(target, args, env);
@@ -203,6 +228,17 @@ impl<'a> TypeChecker<'a> {
                                      r.clone()),
                     r
                 )
+            },
+            &ast::Expr::EnumInit(ref ty, ref field, ref args) => {
+                let enum_type = match ty {
+                    &ast::Type::Named(ref name) => Type::Enum(name.clone()),
+                    x => panic!("{:?}", x),
+                };
+                let mut v = Vec::new();
+                for arg in args {
+                    v.push(self.eval_expr(arg, env ).0);
+                };
+                (Expr::EnumInit(enum_type.clone(), field.clone(), v), enum_type)
             },
             x => panic!("{:?} is not implemented", x)
         }
@@ -226,7 +262,7 @@ impl<'a> TypeChecker<'a> {
     fn type_from_struct_call(&self, name: &String, field: &String, args: &Vec<(Expr, Type)>) -> Type {
         let s = self.structs.get(name).unwrap();
         match s.0.args.get(field) {
-            Some(x) => return x.clone(),//field
+            Some(x) => return x.0.clone(),//field
             None => {
                 match s.1.get(field) {
                     Some(&(ref arg_ty, ref ret_ty)) => {
@@ -285,7 +321,7 @@ impl<'a> TypeChecker<'a> {
                     if ty.1 == *ret_type {
                         Statement::Return {ty: ty.1, expr: Box::new(ty.0)}
                     } else {
-                        panic!("")
+                        panic!("return type should be {:?}, not {:?}", ret_type, ty.1)
                     }
                 },
                 &ast::Statement::Assignment(ref l_expr, ref expr) => {
@@ -302,8 +338,8 @@ impl<'a> TypeChecker<'a> {
                     }
                 },
                 &ast::Statement::FunctionCall(ref expr, ref args) => {
-                    let (t, a, _) = self.function_call(expr,args,env);
-                    Statement::FunctionCall(Box::new(t), a)
+                    let (t, a, ty) = self.function_call(expr,args,env);
+                    Statement::FunctionCall(Box::new(t), a, ty)
                 },
                 &ast::Statement::MethodCall(ref expr, ref field, ref args) => {
                     let (eval_target, arg_expr, _) = self.eval_method_call(expr, field, &args, env);
@@ -372,13 +408,16 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    pub fn global(&self) -> Globals {
+    pub fn global(&self, links: Vec<String>) -> Globals {
         let structs:HashMap<String, Struct> = self.structs.iter().map(|(name, &(ref s, _))| {
             ((*name).clone(), s.clone())
         }).collect();
         let functions:HashSet<Function> = self.typed_functions.iter().map(|(_, ref s)| {
             (*s).clone()
         }).collect();
-        Globals { functions, structs}
+        let enums:HashMap<String, Enum> = self.enums.iter().map(|(name, e)| {
+            ((*name).clone(), e.clone())
+        }).collect();
+        Globals { functions, structs, enums, links}
     }
 }

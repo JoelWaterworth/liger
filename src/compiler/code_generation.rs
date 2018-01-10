@@ -1,6 +1,6 @@
 use super::llvm_node::LLVMNode;
 use type_checker::typed_ast::*;
-use parsing::ast::BinaryOperator;
+use parsing::ast::{BinaryOperator, Lit};
 use std::collections::HashMap;
 
 struct FunctionWriter<'a> {
@@ -17,14 +17,14 @@ impl<'a> FunctionWriter<'a> {
         return_type.insert(0, '%');
         let mut args = Vec::new();
         for val in stru.args.values() {
-            args.push(self.code_generation.generate_type(val))
+            args.push(self.code_generation.generate_type(&val.0))
         };
         let mut basic_block = self.new_basic_block();
 
         let ret = self.alloca(&mut basic_block, return_type.clone());
         for (i, ty) in stru.args.values().enumerate() {
             let ptr = self.getelementptr(&mut basic_block, return_type.clone(), ret.clone(), vec![0, i as u8]);
-            self.store(&mut basic_block, self.code_generation.generate_type(ty), ptr, format!("%{}", i as u8));
+            self.store(&mut basic_block, self.code_generation.generate_type(&ty.0), ptr, format!("%{}", i as u8));
         };
 
         let var = self.load(&mut basic_block, return_type.clone(), ret.clone());
@@ -38,10 +38,47 @@ impl<'a> FunctionWriter<'a> {
         }
     }
 
+    fn generate_enum_constructors(&mut self, enu: &Enum) -> Vec<LLVMNode> {
+        let mut v = Vec::new();
+        let enum_name = enu.name.clone();
+        for &(ref member_name, ref args) in &enu.members {
+            let mut basic_block = self.new_basic_block();
+            let name = format!("{}.{}", enum_name, member_name);
+            let return_type = format!("%{}.{}", enum_name, member_name);
+            let mut a = Vec::new();
+            for val in args {
+                a.push(self.code_generation.generate_type(&val))
+            };
+
+            let ret = self.alloca(&mut basic_block, return_type.clone());
+            for (i, val) in args.iter().enumerate() {
+                let ptr = self.getelementptr(&mut basic_block, return_type.clone(), ret.clone(), vec![0, i as u8]);
+                self.store(&mut basic_block, self.code_generation.generate_type(&val), ptr, format!("%{}", i as u8));
+            }
+            let var = self.load(&mut basic_block, return_type.clone(), ret.clone());
+            self.ret(&mut basic_block, return_type.clone(), var);
+
+            v.push(LLVMNode::Define {
+                name,
+                return_type,
+                args: a,
+                basic_blocks: vec![basic_block],
+            })
+        }
+        v
+    }
+
     fn new_basic_block(&mut self) -> LLVMNode {
         let label = format!("block.{}", self.block_number);
         self.block_number += 1;
-        LLVMNode::BasicBlock {label, instructions: Vec::new()}
+        LLVMNode::BasicBlock {
+            label,
+            instructions: Vec::new(),
+            terminator: Box::new(LLVMNode::Ret {
+                ty: String::from("void"),
+                val: String::new()
+            })
+        }
     }
 
     fn new_variable(&mut self) -> String {
@@ -57,7 +94,7 @@ impl<'a> FunctionWriter<'a> {
     }
 
     fn ret(&self, root: &mut LLVMNode, ty: String, val: String) {
-        root.push_to_basic_block(
+        root.basic_block_terminate(
             LLVMNode::Ret {
                 ty,
                 val,
@@ -89,6 +126,9 @@ impl<'a> FunctionWriter<'a> {
                         source_val: val,
                     }
                 );
+            },
+            Statement::FunctionCall(ref target, ref args, ref ret) => {
+                self.function_call(root, target.as_ref(), args, ret);
             }
             x => panic!("{:?}", x)
         }
@@ -130,19 +170,75 @@ impl<'a> FunctionWriter<'a> {
             &Expr::StructInit(ref ty, ref args) => {
                 let mut struct_name = String::from(ty);
                 struct_name.remove(0);
-                let stru = self.code_generation.structs.get(&struct_name).unwrap();
+                let stru = &self.code_generation.structs.get(&struct_name).unwrap().0;
                 let mut func = struct_name;
                 func.insert(0, '@');
                 let mut fields = Vec::new();
                 for &(ref field, ref arg) in args {
                     let a = self.generate_expression(root, arg);
-                    let t = stru.args.get(field).unwrap();
+                    let t = &stru.args.get(field).unwrap().0;
                     fields.push(( String::from(t),a));
                 };
                 self.call(root, String::from(ty), func, fields)
             },
+            &Expr::Lit(ref val, ref ty) => {
+                match val {
+                    &Lit::Integral(v) => {
+                        format!("{}", v)
+                    }
+                }
+            },
+            &Expr::MethodCall(ref target, ref ty, ref field, ref args, ref ret_ty) => {
+                let src = self.generate_expression(root, target.as_ref());
+                match ty {
+                    &Type::Struct(ref name) => {
+                        let stru = &self.code_generation.structs.get(name).unwrap().0;
+                        match stru.args.get(field) {
+                            Some(&(ref tye, offset)) => {
+                                let dst = self.new_variable();
+                                root.push_to_basic_block(
+                                    LLVMNode::ExtractValue {
+                                        ty: String::from(ty),
+                                        src,
+                                        dst: dst.clone(),
+                                        offset: offset as u8,
+                                    }
+                                );
+                                return dst;
+                            },
+                            None => ()
+                        };
+                        panic!("")
+                    },
+                    x => panic!("{:?}", x)
+                }
+            },
+            &Expr::App(ref target, ref args, ref ret) => {
+                self.function_call(root, target.as_ref(), args, ret)
+            },
             x => panic!("{:?}", x)
         }
+    }
+
+    fn function_call(&mut self, root: &mut LLVMNode, target: &Expr, args: &Vec<Expr>, ret: &Type) -> String {
+        let dst = self.new_variable();
+        let func = match target {
+            &Expr::Var(ref name, ref ty) => format!("@{}", name.clone()),
+            x => panic!("{:?}", x)
+        };
+        let mut a = Vec::new();
+        for arg in args {
+            a.push((String::from(&arg.get_type()), self.generate_expression(root, arg)));
+        }
+        root.push_to_basic_block(
+            LLVMNode::Call {
+                dst: dst.clone(),
+                ret_ty: String::from(ret),
+                func,
+                args: a,
+            }
+        );
+        dst
     }
 
     fn call(&mut self, basic_block: &mut LLVMNode, ret_ty: String, func: String, args: Vec<(String, String)>) -> String {
@@ -159,7 +255,7 @@ impl<'a> FunctionWriter<'a> {
     }
 
     fn unreachable(&self, basic_block: &mut LLVMNode) {
-        basic_block.push_to_basic_block(LLVMNode::Unreachable)
+        basic_block.basic_block_terminate(LLVMNode::Unreachable)
     }
 
     pub fn generate_match(&mut self, root: &mut LLVMNode, cases: Vec<Case>) -> Vec<LLVMNode> {
@@ -215,7 +311,7 @@ impl<'a> FunctionWriter<'a> {
 
     fn branch(&mut self, root: &mut LLVMNode, branch: String) -> String {
         let dst = self.new_variable();
-        root.push_to_basic_block(
+        root.basic_block_terminate(
             LLVMNode::Branch {
                 branch,
             }
@@ -314,26 +410,55 @@ impl<'a> FunctionWriter<'a> {
         }
     }
 
+    pub fn declare(&mut self, func: Function) -> LLVMNode {
+        let return_type = self.code_generation.generate_type(func.ret_ty.as_ref());
+        let mut args = Vec::new();
+        for arg in func.args_ty {
+            args.push(self.code_generation.generate_type(&arg));
+        }
+
+        LLVMNode::Declare {
+            name: func.name,
+            return_type,
+            args,
+        }
+    }
+
     pub fn init(code_generation: &'a CodeGeneration) -> Self {
         Self {code_generation, block_number: 0, variable_number: 0, vars: HashMap::new()}
     }
 }
 
 pub struct CodeGeneration {
-    structs: HashMap<String, Struct>,
+    structs: HashMap<String, (Struct, u64, u64)>,
+    enums: HashMap<String, (Enum, u64, u64)>,
 }
 
 impl CodeGeneration {
     pub fn new(globals: Globals) -> Vec<LLVMNode> {
         let mut llvm_nodes = Vec::new();
-        let code_generation = CodeGeneration{structs: globals.structs.clone()};
+        let structs = globals.structs.iter().map(|(ref n, ref stru)| {
+            let name = (*n).clone();
+            let (size, align) = CodeGeneration::size_n_align_of(&Type::Struct(name.clone()), &globals.enums, &globals.structs);
+            (name.clone(), ((*stru).clone(), size, align))
+        }).collect();
+        let enums = globals.enums.iter().map(|(ref n, ref enu)| {
+            let name = (*n).clone();
+            let (size, align) = CodeGeneration::size_n_align_of(&Type::Enum(name.clone()), &globals.enums, &globals.structs);
+            (name.clone(), ((*enu).clone(), size, align))
+        }).collect();
+        let code_generation = CodeGeneration{structs, enums};
         let mut function_writer = FunctionWriter::init(&code_generation);
-        for (_, stru) in globals.structs {
+        for (_, &(ref stru, _ ,_ )) in code_generation.structs.iter() {
             llvm_nodes.append(&mut code_generation.generate_struct(stru));
+        }
+        for (_, &(ref enu, size, _ )) in code_generation.enums.iter() {
+            llvm_nodes.append(&mut code_generation.generate_enum(enu, size));
         }
         for func in globals.functions {
             match func.cases.clone() {
                 Body::Cases(_) => llvm_nodes.push(function_writer.generate_function(func)),
+                Body::BuiltInFunc(_) => llvm_nodes.push(function_writer.declare(func)),
                 _ => {},
             }
         }
@@ -345,14 +470,95 @@ impl CodeGeneration {
             &Type::Int => String::from("i64"),
             &Type::Unit => String::from("void"),
             &Type::Struct(ref n) => format!("%{}", n),
+            &Type::Enum(ref n) => format!("%{}", n),
+            x => panic!("{:?}", x),
+        }
+    }
+    pub fn size_n_align_of(ty: &Type, enums: &HashMap<String, Enum>, structs: &HashMap<String, Struct>) -> (u64, u64) {
+        fn align(size: &mut u64, align: u64) {
+            if (*size % align) != 0 {
+                *size = *size + (align - (*size % align));
+            }
+        }
+        match ty {
+            &Type::Int => (8, 8),
+            &Type::Struct(ref n) => {
+                let mut max_align = 0;
+                let mut size = 0;
+                let stru = structs.get(n).unwrap();
+                for (_, &(ref field, _)) in stru.args.iter() {
+                    let (field_size, field_align) = CodeGeneration::size_n_align_of(field, enums, structs);
+                    align(&mut size, field_align);
+                    size += field_size;
+                    if field_align > max_align {
+                        max_align = field_align;
+                    }
+                };
+                align(&mut size, max_align);
+                (size, max_align)
+            },
+            &Type::Enum(ref n) => {
+                let mut max_size = 0;
+                let mut max_align = 0;
+                let enu = enums.get(n).unwrap();
+                for members in enu.members.iter() {
+                    let mut size = 0;
+                    for arg in members.1.iter() {
+                        let (field_size, field_align) = CodeGeneration::size_n_align_of(arg, enums, structs);
+                        align(&mut size, field_align);
+                        size += field_size;
+                        if field_align > max_align {
+                            max_align = field_align;
+                        }
+                    };
+                    if size > max_size {
+                        max_size = size;
+                    };
+                };
+                (max_size + 1, max_align)
+            },
             x => panic!("{:?}", x),
         }
     }
 
-    pub fn generate_struct(&self, stru: Struct) -> Vec<LLVMNode> {
+    pub fn generate_enum(&self, enu: &Enum, size: u64) -> Vec<LLVMNode> {
+        let mut name = enu.name.clone();
+        let types = vec![String::from("i8"), format!("[{} x i8]", size - 1)];
+        name.insert(0, '%');
+
+        let mut constructors = Vec::new();
+
+        let mut nodes = Vec::new();
+        for &(ref member_name, ref args) in &enu.members {
+            let n = format!("{}.{}", name, member_name.clone());
+            let mut function_writer = FunctionWriter::init(self);
+            constructors = function_writer.generate_enum_constructors(&enu);
+            let mut v = Vec::new();
+            for arg in args {
+                v.push(self.generate_type(&arg));
+            }
+            v.insert(0, String::from("i8"));
+            nodes.push(
+                LLVMNode::Type {
+                    name: n,
+                    types: v,
+                }
+            )
+        }
+
+        nodes.insert(0, LLVMNode::Type {
+            name,
+            types
+        });
+
+        nodes.append(&mut constructors);
+        nodes
+    }
+
+    pub fn generate_struct(&self, stru: &Struct) -> Vec<LLVMNode> {
         let mut types = Vec::new();
         for val in stru.args.values() {
-            types.push(self.generate_type(val))
+            types.push(self.generate_type(&val.0))
         };
         let mut struct_name = stru.name.clone();
         struct_name.insert(0, '%');

@@ -5,10 +5,10 @@ use parsing::parser::parse_source_file;
 use parsing::ast::SourceFile;
 use parsing::tokenizer::{lexer};
 
-pub fn parse(slice: &[u8], display_tokens: bool, display_ast: bool) -> SourceFile {
+pub fn parse(slice: String, display_tokens: bool, display_ast: bool) -> SourceFile {
     let mut x = lexer(slice);
     if display_tokens {
-        println!("{:?}", x);
+        println!("tokens {:?}", x);
     }
     x.reverse();
     let sf = parse_source_file(&mut x);

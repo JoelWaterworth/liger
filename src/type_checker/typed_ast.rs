@@ -5,7 +5,9 @@ use std::hash::{Hasher, Hash};
 #[derive(Clone, Debug)]
 pub struct Globals {
     pub functions: HashSet<Function>,
-    pub structs: HashMap<String, Struct>
+    pub structs: HashMap<String, Struct>,
+    pub enums: HashMap<String, Enum>,
+    pub links: Vec<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -15,7 +17,8 @@ pub enum Type {
     Struct(String),
     Unit,
     Bool,
-    Cell(Box<Type>)
+    Enum(String),
+    Cell(Box<Type>),
 }
 
 impl<'a> From<&'a Type> for String {
@@ -49,6 +52,7 @@ impl PartialEq for Type {
         match (self, other) {
             (&Type::Function(ref left), &Type::Function(ref right)) => left == right,
             (&Type::Struct(ref left),   &Type::Struct(ref right))   => left == right,
+            (&Type::Enum(ref left),     &Type::Enum(ref right))     => left == right,
             (&Type::Cell(ref left),     &Type::Cell(ref right))     => left == right,
             (&Type::Cell(ref left),     right)                      => left.as_ref() == right,
             (left,                      &Type::Cell(ref right))     => left == right.as_ref(),
@@ -72,6 +76,12 @@ impl PartialEq for ConstVal {
     fn eq(&self, other: &ConstVal) -> bool {
         self.val == other.val
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct Enum {
+    pub name: String,
+    pub members: Vec<(String, Vec<Type>)>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -136,7 +146,7 @@ pub enum Statement {
         name: String,
         expr: Box<Expr>
     },
-    FunctionCall(Box<Expr>, Vec<Expr>),
+    FunctionCall(Box<Expr>, Vec<Expr>, Type),
     MethodCall(Box<Expr>, String, Vec<Expr>),
     Return{
         ty: Type,
@@ -154,8 +164,28 @@ pub enum Expr {
     If(Box<Expr>, Vec<Statement>, Vec<Statement>, Type),
     Case(Box<Expr>, Vec<(Pattern, Box<Expr>)>, Type),
     Lit(ast::Lit, Type),
-    MethodCall(Box<Expr>, String, Vec<Expr>, Type),
+    MethodCall(Box<Expr>, Type, String, Vec<Expr>, Type),
     StructInit(Type, Vec<(String, Expr)>),
+    EnumInit(Type, String, Vec<Expr>),
+}
+
+impl Expr {
+    pub fn get_type(&self) -> Type {
+        match self {
+            &Expr::Var(_, ref ty) => ty.clone(),
+            &Expr::BinaryExpr(_, _, _, ref ty) => ty.clone(),
+            &Expr::UnaryExpr(_, _, ref ty) => ty.clone(),
+            &Expr::Lambda(_, _, ref ty) => ty.clone(),
+            &Expr::App(_, _, ref ty) => ty.clone(),
+            &Expr::If(_, _, _, ref ty) => ty.clone(),
+            &Expr::Case(_, _, ref ty) => ty.clone(),
+            &Expr::Lit(_, ref ty) => ty.clone(),
+            &Expr::MethodCall(_, _, _, _, ref ty) => ty.clone(),
+            &Expr::StructInit(ref ty, _) => ty.clone(),
+            &Expr::EnumInit(ref ty, _, _) => ty.clone(),
+            x => panic!("{:?}", x)
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -167,7 +197,7 @@ pub enum LExpr {
 #[derive(Clone, Debug)]
 pub struct Struct {
     pub name: String,
-    pub args: HashMap<String, Type>,
+    pub args: HashMap<String, (Type, i32)>,
     pub methods: HashMap<String, Function>,
 }
 

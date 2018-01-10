@@ -5,21 +5,127 @@ pub fn parse_source_file(tokens: &mut Vec<Token>) -> SourceFile {
     let mut decls = Vec::new();
     let mut imports = Vec::new();
     loop {
-        let n = clone_nested(tokens.last());
-        match n.clone() {
+        match clone_nested(tokens.last()) {
             Some(Token::Identifier(_)) => decls.push(Declaration::FunctionDef( parse_function(tokens))),
             Some(Token::Struct) => decls.push(parse_struct(tokens)),
             Some(Token::Trait) => decls.push(parse_trait(tokens)),
             Some(Token::Import) => imports.push(parse_import(tokens)),
-            Some(_) => panic!("unexpect {:?} in parse_source_file", n),
+            Some(Token::Enum) => decls.push(parse_enum(tokens)),
+            Some(Token::Link) => decls.push(parse_link(tokens)),
+            Some(Token::Extern)=> {
+                for func in parse_extern(tokens) {
+                    decls.push(Declaration::FunctionDef(func))
+                }
+            },
+            Some(n) => panic!("unexpect {:?} in parse_source_file", n),
             None => break
         }
     }
     SourceFile {decls, imports}
 }
 
+fn parse_link(tokens: &mut Vec<Token>) -> Declaration {
+    expect_token(tokens, Token::Link);
+    expect_token(tokens, Token::Quote);
+    expect_identifier(tokens);
+    expect_token(tokens, Token::Colon);
+    let name = expect_identifier(tokens);
+    expect_token(tokens, Token::Quote);
+    Declaration::Link(name)
+}
+
+fn parse_extern(tokens: &mut Vec<Token>) -> Vec<FunctionDefinition> {
+    expect_token(tokens, Token::Extern);
+    expect_token(tokens, Token::OpenCurly);
+    let mut v = Vec::new();
+    loop {
+        match clone_nested(tokens.last()) {
+            Some(Token::Identifier(_)) => {
+                v.push(parse_function_type(tokens));
+                expect_token(tokens, Token::SemiColon);
+            },
+            Some(Token::CloseCurly) => {
+                tokens.pop();
+                break
+            },
+            x => panic!("{:?}", x)
+        }
+    }
+    v
+}
+
+fn parse_type(tokens: &mut Vec<Token>) -> Type {
+    match tokens.pop().unwrap() {
+        Token::Identifier(name) => Type::Named(name),
+        x => panic!("{:?}", x)
+    }
+}
+
+fn parse_enum(tokens: &mut Vec<Token>) -> Declaration {
+    expect_token(tokens, Token::Enum);
+    let name = expect_identifier(tokens);
+    expect_token(tokens, Token::OpenCurly);
+    let mut fields = Vec::new();
+    loop {
+        match tokens.pop().unwrap() {
+            Token::Identifier(name) => {
+                let mut body = Vec::new();
+                match clone_nested(tokens.last()).unwrap() {
+                    Token::OpenParen => {
+                        tokens.pop();
+                        loop {
+                            match clone_nested(tokens.last()).unwrap() {
+                                Token::Identifier(_) => {
+                                    body.push(parse_type(tokens));
+                                    match clone_nested(tokens.last()).unwrap() {
+                                        Token::CloseParen => {
+                                            tokens.pop();
+                                            break
+                                            match tokens.pop().unwrap() {
+                                                Token::Comma => {},
+                                                Token::CloseCurly => break,
+                                                x => panic!("{:?}", x)
+                                            }
+                                        },
+                                        Token::Comma => {
+                                            tokens.pop();
+                                        },
+                                        x => panic!("{:?}", x)
+                                    }
+                                },
+                                Token::CloseParen => {
+                                    tokens.pop();
+                                    break
+                                    match tokens.pop().unwrap() {
+                                        Token::Comma => {},
+                                        Token::CloseCurly => break,
+                                        x => panic!("{:?}", x)
+                                    }
+                                },
+                                x => panic!("{:?}", x)
+                            }
+                        }
+                    },
+                    Token::Comma => {
+                        tokens.pop();
+                    },
+                    Token::CloseCurly => {
+                        tokens.pop();
+                        break
+                    },
+                    x => panic!("{:?}", x)
+                };
+                fields.push(EnumField{name, body});
+            },
+            Token::CloseCurly => break,
+            x => panic!("{:?}", x)
+        };
+    };
+    Declaration::Enum(name, fields)
+}
+
 #[allow(unused_variables)]
-pub fn parse_import(tokens: &mut Vec<Token>) -> String {
+fn parse_import(tokens: &mut Vec<Token>) -> String {
     panic!("")
 }
 
@@ -44,16 +150,50 @@ fn parse_struct_args(tokens: &mut Vec<Token>) -> Vec<(String, Expr)> {
     }
 }
 
+fn if_expected_than<F: Fn(&mut Vec<Token>)>(tokens: &mut Vec<Token>, expected: Token, f: F) {
+    let t = clone_nested(tokens.last());
+    if t == Some(expected) {
+        f(tokens);
+    };
+}
+
 pub fn parse_term(tokens: &mut Vec<Token>) -> Expr {
     let t = tokens.pop().unwrap();
     match t {
         Token::Integer(x) => Expr::Lit(Lit::Integral(x)),
         Token::Identifier(x) => {
-            let t = clone_nested(tokens.last());
-            match t {
+            match clone_nested(tokens.last()) {
                 Some(Token::OpenCurly) => {
                     let args = parse_struct_args(tokens);
                     Expr::StructInit(Type::Named(x), args)
+                }
+                Some(Token::Colon) => {
+                    tokens.pop();
+                    expect_token(tokens, Token::Colon);
+                    let n = expect_identifier(tokens);
+                    let mut arg = Vec::new();
+
+                    match clone_nested(tokens.last()) {
+                        Some(Token::OpenParen) => {
+                            if_expected_than(tokens, Token::CloseParen, |t| {
+                                t.pop();
+                            });
+                            tokens.pop();
+                            loop {
+                                arg.push(parse_expr(tokens));
+                                match clone_nested(tokens.last()) {
+                                    Some(Token::CloseParen) => {
+                                        tokens.pop();
+                                        break
+                                    },
+                                    Some(Token::Comma) => {},
+                                    x => panic!("{:?}", x)
+                                }
+                            }
+                        },
+                        _ => {}
+                    };
+                    return Expr::EnumInit(Type::Named(x), n, arg);
                 }
                 _ => Expr::Var(x)
             }
