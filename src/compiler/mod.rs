@@ -10,10 +10,14 @@ mod code_generation;
 mod llvm_node;
 use std::process::Command;
 use compiler::llvm_node::LLVMNode;
+use std::path::Path;
+use std::ffi::OsStr;
 
-pub fn compile(globals: Globals) {
+pub fn compile(globals: Globals, path: &Path) {
     let code = CodeGeneration::new(globals);
-    let mut compiler = Compiler::new("bin\\foo.ll");
+    let file_name = path.file_stem().unwrap().to_str().unwrap();
+    let llvm_ir = format!("bin\\{}.ll", file_name.clone());
+    let mut compiler = Compiler::new(&Path::new(&llvm_ir));
     match compiler.write_top_levels(code) {
         Ok(()) => {},
         Err(x) => println!("{}", x)
@@ -23,13 +27,14 @@ pub fn compile(globals: Globals) {
         .arg("bin")
         .output();
 
+    let exe = format!("bin/{}.exe", file_name.clone());
     Command::new("clang")
-        .args(&["util.o", "bin\\foo.ll", "-o", "bin/foo.exe"])
+        .args(&["util.o", llvm_ir.as_ref(), "-o", exe.as_ref()])
         .output()
         .expect("failed to execute process");
 
     print!("\n program now running \n\n");
-    Command::new("bin\\foo.exe")
+    Command::new(exe)
         .spawn()
         .expect("A subdirectory or file bin already exists.");
 }
@@ -40,7 +45,7 @@ struct Compiler {
 }
 
 impl Compiler {
-    fn new(path: &str) -> Self {
+    fn new(path: &Path) -> Self {
         Compiler {
             file: File::create(path).unwrap(),
             indent: 0,

@@ -45,7 +45,7 @@ fn main() {
 
     if command == Some(String::from("compile")) {
         println!("compiling source code");
-        compile(ty);
+        compile(ty, path);
     } else if command == Some(String::from("interpret")) {
         println!("interpreting source code");
         interpret_source_file(ty);
