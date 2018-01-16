@@ -145,7 +145,7 @@ fn parse_struct_args(tokens: &mut Vec<Token>) -> Vec<(String, Expr)> {
                     _ => panic!("")
                 }
             }
-            _ => panic!("")
+            x => panic!("unexpected {:?}", x)
         }
     }
 }
@@ -158,8 +158,7 @@ fn if_expected_than<F: Fn(&mut Vec<Token>)>(tokens: &mut Vec<Token>, expected: T
 }
 
 pub fn parse_term(tokens: &mut Vec<Token>) -> Expr {
-    let t = tokens.pop().unwrap();
-    match t {
+    match tokens.pop().unwrap() {
         Token::Integer(x) => Expr::Lit(Lit::Integral(x)),
         Token::Identifier(x) => {
             match clone_nested(tokens.last()) {
@@ -201,8 +200,19 @@ pub fn parse_term(tokens: &mut Vec<Token>) -> Expr {
         Token::If => {
             let (expr, fs, ss) = parse_if_statement(tokens);
             Expr::If(Box::new(expr), fs, ss)
-        }
-        _ => panic!("unexpected {:?}", t)
+        },
+        Token::OpenSquare => {
+            let mut v = Vec::new();
+            loop {
+                v.push(parse_expr(tokens));
+                match tokens.pop().unwrap() {
+                    Token::CloseSquare => return Expr::SliceInit(v),
+                    Token::Comma => {},
+                    t => panic!("unexpected {:?}", t),
+                }
+            }
+        },
+        t => panic!("unexpected {:?}", t)
     }
 }
 
@@ -242,8 +252,7 @@ fn function_args(tokens: &mut Vec<Token>) -> Option<Vec<Expr>> {
 fn parse_expr_0(tokens: &mut Vec<Token>) -> Expr {
     let mut output = parse_term(tokens);
     loop {
-        let n = clone_nested(tokens.last());
-        match n {
+        match clone_nested(tokens.last()) {
             Some(Token::OpenParen) => {
                 let v = function_args(tokens).unwrap();
                 output = Expr::App(Box::new(output), v)
@@ -255,14 +264,19 @@ fn parse_expr_0(tokens: &mut Vec<Token>) -> Expr {
                     Some(Token::Identifier(y)) => y,
                     _ => panic!("expected function name found {:?}", x)
                 };
-                let n = clone_nested(tokens.last());
-                match n {
+                match clone_nested(tokens.last()) {
                     Some(Token::OpenParen) => {
                         let v = function_args(tokens).unwrap();
                         output = Expr::MethodCall(Box::new(output), name, v)
-                    }
+                    },
                     _ => output = Expr::MethodCall(Box::new(output), name, Vec::new())
                 }
+            },
+            Some(Token::OpenSquare) => {
+                tokens.pop();
+                let index = parse_expr(tokens);
+                expect_token(tokens, Token::CloseSquare);
+                output = Expr::Index(Box::new(output), Box::new(index))
             }
             _ => return output
         }

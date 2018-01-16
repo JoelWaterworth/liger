@@ -18,6 +18,7 @@ pub enum Type {
     Unit,
     Bool,
     Enum(String),
+    Array(Box<Type>, usize),
     Cell(Box<Type>),
 }
 
@@ -113,7 +114,8 @@ impl PartialEq for Function {
 #[derive(Clone, Debug)]
 pub enum Body {
     BuiltInFunc(String),
-    Cases(Vec<Case>)
+    Cases(Vec<Case>),
+    Declare,
 }
 
 impl Hash for Function {
@@ -167,6 +169,8 @@ pub enum Expr {
     MethodCall(Box<Expr>, Type, String, Vec<Expr>, Type),
     StructInit(Type, Vec<(String, Expr)>),
     EnumInit(Type, String, Vec<Expr>),
+    SliceInit(Vec<Expr>, Type),
+    Index(Box<Expr>, Box<Expr>, Type)
 }
 
 impl Expr {
@@ -183,7 +187,8 @@ impl Expr {
             &Expr::MethodCall(_, _, _, _, ref ty) => ty.clone(),
             &Expr::StructInit(ref ty, _) => ty.clone(),
             &Expr::EnumInit(ref ty, _, _) => ty.clone(),
-            x => panic!("{:?}", x)
+            &Expr::Index(_, _, ref ty) => ty.clone(),
+            x => panic!("{:?}", x),
         }
     }
 }

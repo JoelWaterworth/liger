@@ -1,7 +1,13 @@
 use parsing::ast::BinaryOperator;
+use std::hash::{Hash, Hasher};
 
 #[derive(Clone, Debug)]
 pub enum LLVMNode {
+    GlobalConstant {
+        name: String,
+        ty: String,
+        data: String,
+    },
     Define{
         name: String,
         return_type: String,
@@ -60,7 +66,8 @@ pub enum LLVMNode {
         ty: String,
         src: String,
         dst: String,
-        offset: Vec<u8>,
+        offset: Vec<String>,
+        offset_ty: String,
     },
     ExtractValue {
         ty: String,
@@ -74,7 +81,38 @@ pub enum LLVMNode {
         func: String,
         args: Vec<(String, String)>,
     },
+    Constant {
+        ty: String,
+        val: String,
+    },
+    BitCast {
+        dst: String,
+        src_ty: String,
+        end_ty: String,
+        val: String,
+    }
 }
+
+#[derive(Clone, Debug)]
+pub struct FunctionDeclare {
+    pub name: String,
+    pub return_type: String,
+    pub args: Vec<String>,
+}
+
+impl Hash for FunctionDeclare {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+    }
+}
+
+impl PartialEq for FunctionDeclare {
+    fn eq(&self, other: &FunctionDeclare) -> bool {
+        self.name == other.name
+    }
+}
+
+impl Eq for FunctionDeclare {}
 
 impl LLVMNode {
     pub fn push_to_basic_block(&mut self, node: LLVMNode) {

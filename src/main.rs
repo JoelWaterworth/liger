@@ -1,7 +1,4 @@
-#![feature(box_patterns)]
-
-#[macro_use]
-extern crate nom;
+#![feature(box_patterns, box_syntax)]
 extern crate libc;
 /*
     TODO: create llvm backend

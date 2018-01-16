@@ -55,13 +55,13 @@ pub fn type_check_ast<'a>(sf: &'a SourceFile) -> Globals {
         create_func_ty(func, &shm, &enums)
     }).collect();
     let mut typed_functions = HashMap::new();
-//    typed_functions.insert(String::from("print"),
-//                           Function{
-//        name: String::from("print"),
-//        args_ty: vec![Type::Int],
-//        ret_ty: Box::new(Type::Unit),
-//        cases: Body::BuiltInFunc(String::from("print"))
-//    });
+    typed_functions.insert(String::from("print"),
+                           Function{
+        name: String::from("print"),
+        args_ty: vec![Type::Int],
+        ret_ty: Box::new(Type::Unit),
+        cases: Body::BuiltInFunc(String::from("print"))
+    });
 
     let mut type_checker = TypeChecker{function_types, structs, typed_functions, enums: typed_enums};
     type_checker.parse_methods(methods);
@@ -159,7 +159,7 @@ impl<'a> TypeChecker<'a> {
 
     fn eval_func_cases<'b>(&self, cases: &'b Vec<ast::FuncCase>, arg_type: &'b Vec<Type>, ret_type: &'a Type) -> Body {
         if cases.is_empty() {
-            return Body::BuiltInFunc(String::new())
+            return Body::Declare
         }
         Body::Cases(
             cases.iter().map(|case: &'b ast::FuncCase| {
@@ -239,6 +239,42 @@ impl<'a> TypeChecker<'a> {
                     v.push(self.eval_expr(arg, env ).0);
                 };
                 (Expr::EnumInit(enum_type.clone(), field.clone(), v), enum_type)
+            },
+            &ast::Expr::SliceInit(ref args) => {
+                let mut ty = Type::Unit;
+                let mut a = Vec::new();
+                match args.iter().next() {
+                    Some(e) => {
+                        let (val, t) = self.eval_expr(e, env);
+                        ty = t;
+                    },
+                    None => {}
+                };
+
+                for arg in args {
+                    let (val, t) = self.eval_expr(arg, env);
+                    if t != ty {
+                        panic!("inconsitent types in slice")
+                    }
+                    a.push(val);
+                }
+                println!("{:?}", a);
+                let slice_type = Type::Array(box ty, args.len());
+                (Expr::SliceInit(a, slice_type.clone()), slice_type)
+            },
+            &ast::Expr::Index(ref target, ref index) => {
+                let (array, ty) = self.eval_expr(target, env);
+                match ty {
+                    Type::Array(box x, _) => {
+                        let (index_exp, index_ty) = self.eval_expr(index, env);
+                        if index_ty != Type::Int {
+                            panic!("you should index with a integer type, not {:?}", index_ty)
+                        }
+
+                        (Expr::Index(box array, box index_exp, x.clone()), x)
+                    },
+                    x => panic!("Index on none Slice {:?}", x)
+                }
             },
             x => panic!("{:?} is not implemented", x)
         }

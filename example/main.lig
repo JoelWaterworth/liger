@@ -1,8 +1,14 @@
 link "lib:util"
 
+struct Foo {
+    x i64
+    y i64
+}
+
 main:() -> IO
 main = {
-    printint(4);
+    let f = [5,42,6,1,25,5,1];
+    printint(f[1]);
 }
 
 extern {

@@ -83,7 +83,8 @@ impl Executor {
                                 None => {}
                             }
                         }
-                    }
+                    },
+                    ref x => panic!("{:?}", x)
                 }
                 panic!("No matching function cases {:?}", func_def)
             },

@@ -48,6 +48,8 @@ pub enum Expr {
     MethodCall(Box<Expr>, String, Vec<Expr>),
     StructInit(Type, Vec<(String, Expr)>),
     EnumInit(Type, String, Vec<Expr>),
+    SliceInit(Vec<Expr>),
+    Index(Box<Expr>, Box<Expr>)
 }
 
 #[derive(Clone, Debug)]

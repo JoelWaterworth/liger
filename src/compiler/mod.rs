@@ -11,21 +11,21 @@ mod llvm_node;
 use std::process::Command;
 use compiler::llvm_node::LLVMNode;
 use std::path::Path;
-use std::ffi::OsStr;
 
 pub fn compile(globals: Globals, path: &Path) {
     let code = CodeGeneration::new(globals);
     let file_name = path.file_stem().unwrap().to_str().unwrap();
     let llvm_ir = format!("bin\\{}.ll", file_name.clone());
+
+    Command::new("mkdir")
+        .arg("bin")
+        .output();
+
     let mut compiler = Compiler::new(&Path::new(&llvm_ir));
     match compiler.write_top_levels(code) {
         Ok(()) => {},
         Err(x) => println!("{}", x)
     };
-
-    Command::new("mkdir")
-        .arg("bin")
-        .output();
 
     let exe = format!("bin/{}.exe", file_name.clone());
     Command::new("clang")
@@ -104,7 +104,14 @@ impl Compiler {
                     self.file.write(arg.as_bytes())?;
                 }
                 self.file.write(b")\n")?;
-            }
+            },
+            LLVMNode::GlobalConstant {name, ty, data} => {
+                self.file.write(name.as_bytes())?;
+                self.file.write(b" = private constant ")?;
+                self.file.write(ty.as_bytes())?;
+                self.file.write(b" ")?;
+                self.file.write(data.as_bytes())?;
+            },
             x => panic!("{:?}", x)
         }
         self.file.write(b"\n\n")?;
@@ -200,7 +207,7 @@ impl Compiler {
                 self.file.write(b"* ")?;
                 self.file.write(ptr.as_bytes())?;
             },
-            LLVMNode::GetElementptr { ty, src, dst, offset} => {
+            LLVMNode::GetElementptr { ty, src, dst, offset, offset_ty} => {
                 self.file.write(dst.as_bytes())?;
                 self.file.write(b" = getelementptr ")?;
                 self.file.write(ty.as_bytes())?;
@@ -209,17 +216,19 @@ impl Compiler {
                 self.file.write(b"* ")?;
                 self.file.write(src.as_bytes())?;
                 for o in offset {
-                    self.file.write(b", i32 ")?;
+                    self.file.write(b", ")?;
+                    self.file.write(offset_ty.as_bytes())?;
+                    self.file.write(b" ")?;
                     self.file.write(format!("{}", o).as_bytes())?;
                 }
             },
             LLVMNode::Call {dst, ret_ty, func, args} => {
-                if ret_ty == String::from("void") {
-                    self.file.write(b"tail call ")?;
-                } else {
+                if ret_ty != "void" {
                     self.file.write(dst.as_bytes())?;
-                    self.file.write(b" = call ")?;
-                }
+                    self.file.write(b" = ")?;
+                };
+
+                self.file.write(b"call ")?;
                 self.file.write(ret_ty.as_bytes())?;
                 self.file.write(b" ")?;
                 self.file.write(func.as_bytes())?;
@@ -242,6 +251,15 @@ impl Compiler {
                 self.file.write(src.as_bytes())?;
                 self.file.write(b", ")?;
                 self.file.write(format!("{}", offset).as_bytes())?;
+            },
+            LLVMNode::BitCast { dst, src_ty, end_ty, val} => {
+                self.file.write(dst.as_bytes())?;
+                self.file.write(b" = bitcast ")?;
+                self.file.write(src_ty.as_bytes())?;
+                self.file.write(b"* ")?;
+                self.file.write(val.as_bytes())?;
+                self.file.write(b" to ")?;
+                self.file.write(end_ty.as_bytes())?;
             },
             x => panic!("{:?}", x)
         };

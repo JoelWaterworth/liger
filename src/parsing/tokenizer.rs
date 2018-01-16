@@ -1,5 +1,3 @@
-use std::str;
-use std::str::FromStr;
 use std::str::Chars;
 
 #[allow(dead_code)]
@@ -36,6 +34,8 @@ pub enum Token {
     OpenCurly,
     OpenParen,
     OpenSquare,
+    Delete,
+    New,
     Or,
     RightArrow,
     SemiColon,
@@ -65,6 +65,14 @@ pub fn lexer1(slice: &mut Chars) -> Vec<Token> {
                     ')' => {
                         slice.next();
                         tokens.push(Token::CloseParen)
+                    },
+                    '[' => {
+                        slice.next();
+                        tokens.push(Token::OpenSquare);
+                    },
+                    ']' => {
+                        slice.next();
+                        tokens.push(Token::CloseSquare)
                     },
                     ',' => {
                         slice.next();
@@ -276,6 +284,8 @@ fn find_keywords(v: &mut Vec<Token>) {
                     "mut"       => *t = Token::Mut,
                     "extern"    => *t = Token::Extern,
                     "link"      => *t = Token::Link,
+                    "delete"    => *t = Token::Delete,
+                    "new"       => *t = Token::New,
                     _ => {}
                 }},
             _ => {}
