@@ -1,25 +1,28 @@
 use parsing::ast;
-use std::collections::{HashSet, HashMap};
-use std::hash::{Hasher, Hash};
+use std::collections::{HashMap};
+use std::hash::{Hasher};
+use super::enviroment::Variable;
 
 #[derive(Clone, Debug)]
 pub struct Globals {
-    pub functions: HashSet<Function>,
+    pub functions: HashMap<String, Function>,
     pub structs: HashMap<String, Struct>,
     pub enums: HashMap<String, Enum>,
-    pub links: Vec<String>,
 }
+
+pub type FunctionType = (Vec<Type>, Type);
 
 #[derive(Clone, Debug)]
 pub enum Type {
     Int,
-    Function(Function),
+    Function(Box<FunctionType>),
     Struct(String),
     Unit,
     Bool,
     Enum(String),
     Array(Box<Type>, usize),
     Cell(Box<Type>),
+    Module,
 }
 
 impl<'a> From<&'a Type> for String {
@@ -99,15 +102,13 @@ pub enum Pattern {
 
 #[derive(Debug, Clone)]
 pub struct Function {
-    pub name: String,
-    pub args_ty: Vec<Type>,
-    pub ret_ty: Box< Type>,
+    pub var: Variable,
     pub cases: Body
 }
 
 impl PartialEq for Function {
     fn eq(&self, other: &Function) -> bool {
-        self.name == other.name
+        self.var.id == other.var.id
     }
 }
 
@@ -116,12 +117,6 @@ pub enum Body {
     BuiltInFunc(String),
     Cases(Vec<Case>),
     Declare,
-}
-
-impl Hash for Function {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
-    }
 }
 
 impl Eq for Function {}
@@ -144,8 +139,7 @@ pub enum Statement {
         false_statements: Vec<Statement>
     },
     Let{
-        ty: Type,
-        name: String,
+        var: Variable,
         expr: Box<Expr>
     },
     FunctionCall(Box<Expr>, Vec<Expr>, Type),
@@ -158,7 +152,7 @@ pub enum Statement {
 
 #[derive(Clone, Debug)]
 pub enum Expr {
-    Var(String, Type),
+    Var(Variable),
     BinaryExpr(ast::BinaryOperator, Box<Expr>, Box<Expr>, Type),
     UnaryExpr(ast::UnaryOperator, Box<Expr>, Type),
     Lambda(Vec<String>, Box<Expr>, Type),
@@ -176,7 +170,7 @@ pub enum Expr {
 impl Expr {
     pub fn get_type(&self) -> Type {
         match self {
-            &Expr::Var(_, ref ty) => ty.clone(),
+            &Expr::Var(ref var) => var.ty.as_ref().clone(),
             &Expr::BinaryExpr(_, _, _, ref ty) => ty.clone(),
             &Expr::UnaryExpr(_, _, ref ty) => ty.clone(),
             &Expr::Lambda(_, _, ref ty) => ty.clone(),
@@ -195,26 +189,20 @@ impl Expr {
 
 #[derive(Clone, Debug)]
 pub enum LExpr {
-    Var(String),
+    Var(Variable),
     MethodCall(Box<LExpr>, String, Vec<Expr>),
 }
 
 #[derive(Clone, Debug)]
 pub struct Struct {
-    pub name: String,
+    pub var: Variable,
     pub args: HashMap<String, (Type, i32)>,
     pub methods: HashMap<String, Function>,
 }
 
-impl Hash for Struct {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
-    }
-}
-
 impl PartialEq for Struct {
     fn eq(&self, other: &Struct) -> bool {
-        self.name == other.name
+        self.var.id == other.var.id
     }
 }
 

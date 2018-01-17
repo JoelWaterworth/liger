@@ -10,13 +10,13 @@ use std::path::Path;
 use std::env;
 
 mod parsing;
-mod interpreter;
+//mod interpreter;
 mod type_checker;
 mod compiler;
 
 use parsing::*;
 use type_checker::type_check_ast;
-use interpreter::interpret_source_file;
+//use interpreter::interpret_source_file;
 use compiler::compile;
 
 fn main() {
@@ -45,6 +45,6 @@ fn main() {
         compile(ty, path);
     } else if command == Some(String::from("interpret")) {
         println!("interpreting source code");
-        interpret_source_file(ty);
+        //interpret_source_file(ty);
     }
 }

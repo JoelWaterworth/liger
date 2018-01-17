@@ -17,8 +17,11 @@ struct FunctionWriter<'a> {
 
 impl<'a> FunctionWriter<'a> {
     fn generate_struct_constructor(&mut self, stru: &Struct) -> LLVMNode {
-        let name = stru.name.clone();
-        let mut return_type = stru.name.clone();
+        let name = String::from(&stru.var.id);
+        let mut return_type = match stru.var.ty {
+            box Type::Struct(ref n) => n.clone(),
+            ref x => panic!("{:?}", x)
+        };
         return_type.insert(0, '%');
         let mut args = Vec::new();
         for val in stru.args.values() {
@@ -153,10 +156,10 @@ impl<'a> FunctionWriter<'a> {
                 let val = self.load(root, gty.clone(), ptr);
                 self.ret(root, gty, val)
             },
-            Statement::Let {ty, name, expr} => {
-                let ptr = self.new_variable();
-                let gty = self.code_generation.generate_type(&ty);
-                self.vars.insert(name, (ptr.clone(), gty.clone()));
+            Statement::Let {var, expr} => {
+                let mut ptr = var.to_string();
+                ptr.insert(0, '%');
+                let gty = self.code_generation.generate_type(&var.ty);
                 root.push_to_basic_block(
                     LLVMNode::Alloca {
                         ty: gty.clone(),
@@ -186,10 +189,12 @@ impl<'a> FunctionWriter<'a> {
 
     pub fn generate_expression(&mut self, root: &mut LLVMNode, expr: &Expr, ptr: String) {
         match expr {
-            &Expr::Var(ref name, _) => return {
-                let (v_ptr, ty) = self.vars.get(name).unwrap().clone();
+            &Expr::Var(ref var) => return {
+                let mut v_ptr = var.to_string();
+                v_ptr.insert(0, '%');
+                let ty = self.code_generation.generate_type(var.ty.as_ref());
                 let temp = self.load(root, ty.clone(), v_ptr);
-                self.store(root, ty, ptr, temp);
+                self.store(root, ty.clone(), ptr, temp);
             },
             &Expr::BinaryExpr(ref op, ref l, ref r, ref ty) => {
                 let gty = self.code_generation.generate_type(ty);
@@ -397,7 +402,7 @@ impl<'a> FunctionWriter<'a> {
     fn function_call(&mut self, root: &mut LLVMNode, target: &Expr, args: &Vec<Expr>, ret: &Type) -> String {
         let dst = self.new_variable();
         let func = match target {
-            &Expr::Var(ref name, ref ty) => format!("@{}", name.clone()),
+            &Expr::Var(ref var) => format!("@{}", var.to_string()),
             x => panic!("{:?}", x)
         };
         let mut a = Vec::new();
@@ -573,10 +578,14 @@ impl<'a> FunctionWriter<'a> {
     }
 
     pub fn generate_function(&mut self, func: Function) -> Vec<LLVMNode> {
-        self.function_name = func.name.clone();
-        let return_type = self.code_generation.generate_type(func.ret_ty.as_ref());
+        self.function_name = func.var.to_string();
+        let (args_ty, ret_ty) = match func.var.ty.as_ref() {
+            &Type::Function(box (ref arg, ref ret)) => (arg.clone(), ret.clone()),
+            x => panic!("{:?}", x),
+        };
+        let return_type = self.code_generation.generate_type(&ret_ty);
         let mut args = Vec::new();
-        for arg in func.args_ty {
+        for arg in args_ty {
             args.push(self.code_generation.generate_type(&arg));
         }
         let mut basic_block = self.new_basic_block();
@@ -588,9 +597,10 @@ impl<'a> FunctionWriter<'a> {
         };
         basic_blocks.insert(0,basic_block);
         let mut globals = self.globals.clone();
+        let name = format!("{}", self.function_name);
         globals.push(
             LLVMNode::Define {
-                name: func.name,
+                name,
                 return_type,
                 args,
                 basic_blocks,
@@ -600,14 +610,18 @@ impl<'a> FunctionWriter<'a> {
     }
 
     pub fn declare(&mut self, func: Function) -> LLVMNode {
-        let return_type = self.code_generation.generate_type(func.ret_ty.as_ref());
+        let (args_ty, ret_ty) = match func.var.ty.as_ref() {
+            &Type::Function(box (ref arg, ref ret)) => (arg.clone(), ret.clone()),
+            x => panic!("{:?}", x),
+        };
+        let return_type = self.code_generation.generate_type(&ret_ty);
         let mut args = Vec::new();
-        for arg in func.args_ty {
+        for arg in args_ty {
             args.push(self.code_generation.generate_type(&arg));
         }
 
         LLVMNode::Declare {
-            name: func.name,
+            name: format!("{}", func.var.to_string()),
             return_type,
             args,
         }
@@ -655,9 +669,9 @@ impl CodeGeneration {
         }
 
         for func in globals.functions {
-            match func.cases.clone() {
-                Body::Cases(_) => llvm_nodes.append(&mut function_writer.generate_function(func)),
-                Body::Declare => llvm_nodes.push(function_writer.declare(func)),
+            match func.1.cases.clone() {
+                Body::Cases(_) => llvm_nodes.append(&mut function_writer.generate_function(func.1)),
+                Body::Declare => llvm_nodes.push(function_writer.declare(func.1)),
                 _ => {},
             }
         }
@@ -770,7 +784,7 @@ impl CodeGeneration {
         for val in stru.args.values() {
             types.push(self.generate_type(&val.0))
         };
-        let mut struct_name = stru.name.clone();
+        let mut struct_name = stru.var.to_string();
         struct_name.insert(0, '%');
 
         let mut function_writer = FunctionWriter::init(self);

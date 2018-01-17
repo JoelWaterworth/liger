@@ -8,7 +8,7 @@ struct Foo {
 main:() -> IO
 main = {
     let f = [5,42,6,1,25,5,1];
-    printint(f[1]);
+    printint(f[0]);
 }
 
 extern {
